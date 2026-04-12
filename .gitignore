@@ -1,0 +1,8 @@
+# Environment variables (keeps your bot token safe!)
+.env
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
