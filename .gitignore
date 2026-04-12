@@ -10,5 +10,8 @@ node_modules/
 # Generated Prisma client
 /generated/prisma
 
-# SQLite database
+# SQLite database and sidecar files
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
