@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+
+// A book scraped from Goodreads
+model Book {
+  id           Int          @id @default(autoincrement())
+  title        String
+  author       String
+  goodreadsUrl String       @unique
+  image        String?
+  pages        Int?
+  rating       String?
+  genres       String       // JSON array stored as string
+  createdAt    DateTime     @default(now())
+
+  nominations  Nomination[]
+  currentBook  CurrentBook?
+}
+
+// Admin-configured nomination period for a given month
+model NominationPeriod {
+  id            Int      @id @default(autoincrement())
+  month         Int
+  year          Int
+  openToAll     Boolean  // true = anyone can nominate, false = single nominator only
+  nominatorId   String?  // Discord user ID if restricted to one person
+  nominatorName String?  // Display name at time of setup
+  createdAt     DateTime @default(now())
+
+  @@unique([month, year])
+}
+
+// A member's monthly book nomination
+model Nomination {
+  id        Int      @id @default(autoincrement())
+  bookId    Int
+  book      Book     @relation(fields: [bookId], references: [id])
+  userId    String   // Discord user ID (snowflake)
+  username  String   // Display name at time of nomination
+  month     Int      // 1–12
+  year      Int
+  createdAt DateTime @default(now())
+}
+
+// A monthly poll to pick the book from nominations
+model Poll {
+  id        Int        @id @default(autoincrement())
+  month     Int
+  year      Int
+  open      Boolean    @default(true)
+  createdAt DateTime   @default(now())
+
+  votes     PollVote[]
+
+  @@unique([month, year])
+}
+
+// A single vote cast in a poll
+model PollVote {
+  id        Int      @id @default(autoincrement())
+  pollId    Int
+  poll      Poll     @relation(fields: [pollId], references: [id])
+  bookId    Int
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@unique([pollId, userId]) // one vote per user per poll
+}
+
+// The active book the club is currently reading
+model CurrentBook {
+  id        Int      @id @default(autoincrement())
+  bookId    Int      @unique
+  book      Book     @relation(fields: [bookId], references: [id])
+  startedAt DateTime @default(now())
+
+  progress  ReadingProgress[]
+}
+
+// A member's reading progress through the current book
+model ReadingProgress {
+  id            Int         @id @default(autoincrement())
+  currentBookId Int
+  currentBook   CurrentBook @relation(fields: [currentBookId], references: [id])
+  userId        String
+  username      String
+  page          Int
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([currentBookId, userId]) // one progress entry per user per book
+}
