@@ -47,6 +47,14 @@ module.exports = {
       return;
     }
 
+    if (log.userId !== interaction.user.id) {
+      await interaction.reply({
+        content: 'You can only rate books in your own book threads.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     await db.readingLog.update({
       where: { threadId: interaction.channelId },
       data: { rating },

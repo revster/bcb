@@ -67,6 +67,14 @@ module.exports = {
       return;
     }
 
+    if (log.userId !== interaction.user.id) {
+      await interaction.reply({
+        content: 'You can only update progress in your own book threads.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     if (log.status === 'finished') {
       await interaction.reply({
         content: `**${log.book.title}** is already marked as finished.`,
