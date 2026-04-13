@@ -1,11 +1,12 @@
 jest.mock('../../db', () => ({
   book: { findUnique: jest.fn(), upsert: jest.fn() },
-  clubBook: { upsert: jest.fn() },
+  clubBook: { upsert: jest.fn(), update: jest.fn() },
   memberChannel: { findMany: jest.fn() },
-  readingLog: { findFirst: jest.fn(), create: jest.fn() },
+  readingLog: { create: jest.fn() },
 }));
 jest.mock('../../lib/scrapeBook');
 jest.mock('../../lib/progressPost', () => ({ updateProgressPost: jest.fn() }));
+jest.mock('../../lib/botLog', () => ({ botLog: jest.fn() }));
 
 const db = require('../../db');
 const scrapeBook = require('../../lib/scrapeBook');
@@ -36,9 +37,15 @@ function makeForumChannel(tagNames = []) {
 
 function makeInteraction(url = VALID_URL, forumChannel = makeForumChannel()) {
   return {
-    options: { getString: jest.fn().mockReturnValue(url) },
+    options: {
+      getString: jest.fn().mockReturnValue(url),
+      getInteger: jest.fn().mockReturnValue(null),
+    },
     guild: {
-      channels: { fetch: jest.fn().mockResolvedValue(forumChannel) },
+      channels: {
+        fetch: jest.fn().mockResolvedValue(forumChannel),
+        cache: { find: jest.fn().mockReturnValue(null) },
+      },
     },
     reply: jest.fn().mockResolvedValue(),
     deferReply: jest.fn().mockResolvedValue(),
@@ -64,7 +71,6 @@ describe('/club-start execute', () => {
       db.book.findUnique.mockResolvedValue(BOOK);
       db.clubBook.upsert.mockResolvedValue({});
       db.memberChannel.findMany.mockResolvedValue([MEMBER_A, MEMBER_B]);
-      db.readingLog.findFirst.mockResolvedValue(null);
       db.readingLog.create.mockResolvedValue({});
     });
 
@@ -102,18 +108,6 @@ describe('/club-start execute', () => {
       );
     });
 
-    test('skips members who already have a reading log', async () => {
-      db.readingLog.findFirst
-        .mockResolvedValueOnce({ id: 1 }) // alice already has a log
-        .mockResolvedValueOnce(null);       // bob does not
-      const forum = makeForumChannel();
-      const interaction = makeInteraction(VALID_URL, forum);
-      await execute(interaction);
-
-      expect(forum.threads.create).toHaveBeenCalledTimes(1);
-      expect(db.readingLog.create).toHaveBeenCalledTimes(1);
-    });
-
     test('applies matching tags when they exist on the channel', async () => {
       const forum = makeForumChannel(['Bot', 'Book Club Book', 'Other']);
       db.memberChannel.findMany.mockResolvedValue([MEMBER_A]);
@@ -125,14 +119,14 @@ describe('/club-start execute', () => {
       );
     });
 
-    test('creates thread without appliedTags when no matching tags exist', async () => {
+    test('creates thread with empty appliedTags when no matching tags exist', async () => {
       const forum = makeForumChannel(['Unrelated']);
       db.memberChannel.findMany.mockResolvedValue([MEMBER_A]);
       const interaction = makeInteraction(VALID_URL, forum);
       await execute(interaction);
 
       const callArg = forum.threads.create.mock.calls[0][0];
-      expect(callArg).not.toHaveProperty('appliedTags');
+      expect(callArg.appliedTags).toEqual([]);
     });
 
     test('applies only the tags that exist (partial match)', async () => {
@@ -153,15 +147,6 @@ describe('/club-start execute', () => {
       expect(interaction.editReply).toHaveBeenCalledWith(
         expect.stringContaining('alice')
       );
-    });
-
-    test('editReply mentions skipped members', async () => {
-      db.readingLog.findFirst.mockResolvedValue({ id: 1 }); // all members skipped
-      const interaction = makeInteraction();
-      await execute(interaction);
-
-      const reply = interaction.editReply.mock.calls[0][0];
-      expect(reply).toContain('skipped');
     });
   });
 

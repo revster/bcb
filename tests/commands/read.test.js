@@ -68,6 +68,7 @@ describe('/read execute', () => {
 
   describe('scrape failure', () => {
     test('replies with error when scraping fails', async () => {
+      jest.spyOn(console, 'error').mockImplementation(() => {});
       scrapeBook.mockRejectedValue(new Error('Goodreads returned 404'));
       db.memberChannel.findUnique.mockResolvedValue(MEMBER_CHANNEL);
       const interaction = makeInteraction();

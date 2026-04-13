@@ -1,19 +1,29 @@
 jest.mock('../../db', () => ({
   readingLog: { findUnique: jest.fn(), update: jest.fn() },
+  clubBook: { findUnique: jest.fn() },
 }));
+jest.mock('../../lib/botLog', () => ({ botLog: jest.fn() }));
 
 const db = require('../../db');
 const { MessageFlags } = require('discord.js');
 const { execute } = require('../../commands/rate');
 
 const BOOK = { title: 'The Great Gatsby' };
-const LOG = { status: 'reading', book: BOOK };
+const LOG = { userId: '999', bookId: 1, status: 'reading', book: BOOK };
+
+// Channel that passes the bot-managed thread guard
+const BOT_CHANNEL = {
+  send: jest.fn().mockResolvedValue(),
+  parent: { availableTags: [{ id: 'tag-bot', name: 'Bot' }] },
+  appliedTags: ['tag-bot'],
+};
 
 function makeInteraction(rating = 4, channelId = 'thread-123') {
   return {
     channelId,
-    channel: { send: jest.fn().mockResolvedValue() },
-    user: { id: '999' },
+    channel: BOT_CHANNEL,
+    guild: { channels: { cache: { find: jest.fn().mockReturnValue(null) } } },
+    user: { id: '999', username: 'alice' },
     options: { getNumber: jest.fn().mockReturnValue(rating) },
     reply: jest.fn().mockResolvedValue(),
   };
@@ -36,6 +46,7 @@ describe('/rate execute', () => {
   test('saves rating to reading log', async () => {
     db.readingLog.findUnique.mockResolvedValue(LOG);
     db.readingLog.update.mockResolvedValue({});
+    db.clubBook.findUnique.mockResolvedValue(null);
     const interaction = makeInteraction(4);
     await execute(interaction);
 
@@ -47,6 +58,7 @@ describe('/rate execute', () => {
   test('saves decimal rating', async () => {
     db.readingLog.findUnique.mockResolvedValue(LOG);
     db.readingLog.update.mockResolvedValue({});
+    db.clubBook.findUnique.mockResolvedValue(null);
     const interaction = makeInteraction(4.5);
     await execute(interaction);
 
@@ -58,24 +70,27 @@ describe('/rate execute', () => {
   test('posts whole stars in thread for integer rating', async () => {
     db.readingLog.findUnique.mockResolvedValue(LOG);
     db.readingLog.update.mockResolvedValue({});
+    db.clubBook.findUnique.mockResolvedValue(null);
     const interaction = makeInteraction(3);
     await execute(interaction);
 
-    expect(interaction.channel.send).toHaveBeenCalledWith('⭐⭐⭐');
+    expect(BOT_CHANNEL.send).toHaveBeenCalledWith('⭐⭐⭐');
   });
 
   test('posts stars with half symbol for .5 rating', async () => {
     db.readingLog.findUnique.mockResolvedValue(LOG);
     db.readingLog.update.mockResolvedValue({});
+    db.clubBook.findUnique.mockResolvedValue(null);
     const interaction = makeInteraction(4.5);
     await execute(interaction);
 
-    expect(interaction.channel.send).toHaveBeenCalledWith('⭐⭐⭐⭐½');
+    expect(BOT_CHANNEL.send).toHaveBeenCalledWith('⭐⭐⭐⭐½');
   });
 
   test('sends ephemeral confirmation', async () => {
     db.readingLog.findUnique.mockResolvedValue(LOG);
     db.readingLog.update.mockResolvedValue({});
+    db.clubBook.findUnique.mockResolvedValue(null);
     const interaction = makeInteraction(5);
     await execute(interaction);
 
@@ -87,6 +102,7 @@ describe('/rate execute', () => {
   test('ephemeral reply includes numeric rating', async () => {
     db.readingLog.findUnique.mockResolvedValue(LOG);
     db.readingLog.update.mockResolvedValue({});
+    db.clubBook.findUnique.mockResolvedValue(null);
     const interaction = makeInteraction(4.5);
     await execute(interaction);
 

@@ -1,22 +1,34 @@
 jest.mock('../../db', () => ({
   readingLog: { findUnique: jest.fn(), update: jest.fn() },
+  clubBook: { findUnique: jest.fn() },
 }));
 jest.mock('../../lib/progressPost', () => ({ updateProgressPost: jest.fn() }));
+jest.mock('../../lib/botLog', () => ({ botLog: jest.fn() }));
 
 const db = require('../../db');
 const { MessageFlags } = require('discord.js');
 const { execute } = require('../../commands/progress');
 
-const BOOK_WITH_PAGES = { title: 'The Great Gatsby', pages: 180 };
-const BOOK_NO_PAGES = { title: 'Some Book', pages: null };
-const LOG = { bookId: 1, status: 'reading', progress: 0, book: BOOK_WITH_PAGES };
+const BOOK_WITH_PAGES = { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', goodreadsUrl: 'https://www.goodreads.com/book/show/4671', pages: 180 };
+const BOOK_NO_PAGES = { title: 'Some Book', goodreadsUrl: 'https://www.goodreads.com/book/show/1', pages: null };
+const LOG = { userId: '999', bookId: 1, status: 'reading', progress: 0, startedAt: new Date(), book: BOOK_WITH_PAGES };
+
+// Channel that passes the bot-managed thread guard
+function makeBotChannel() {
+  return {
+    send: jest.fn().mockResolvedValue(),
+    parent: { availableTags: [{ id: 'tag-bot', name: 'Bot' }] },
+    appliedTags: ['tag-bot'],
+  };
+}
 
 function makeInteraction({ page = null, percentage = null, channelId = 'thread-123' } = {}) {
   return {
     channelId,
-    channel: { send: jest.fn().mockResolvedValue() },
-    guild: {},
-    user: { id: '999' },
+    channel: makeBotChannel(),
+    guild: { channels: { cache: { find: jest.fn().mockReturnValue(null) } }, guildId: 'guild-123' },
+    guildId: 'guild-123',
+    user: { id: '999', username: 'alice' },
     options: {
       getInteger: jest.fn().mockReturnValue(page),
       getNumber: jest.fn().mockReturnValue(percentage),
@@ -30,6 +42,7 @@ afterEach(() => jest.resetAllMocks());
 describe('/progress execute', () => {
   describe('option validation', () => {
     test('replies with error when neither page nor percentage provided', async () => {
+      db.readingLog.findUnique.mockResolvedValue(LOG);
       const interaction = makeInteraction();
       await execute(interaction);
 
@@ -40,6 +53,7 @@ describe('/progress execute', () => {
     });
 
     test('replies with error when both page and percentage provided', async () => {
+      db.readingLog.findUnique.mockResolvedValue(LOG);
       const interaction = makeInteraction({ page: 50, percentage: 50 });
       await execute(interaction);
 
@@ -97,13 +111,16 @@ describe('/progress execute', () => {
       expect(db.readingLog.update).not.toHaveBeenCalled();
     });
 
-    test('accepts page equal to book length', async () => {
+    test('accepts page equal to book length (triggers finish)', async () => {
       db.readingLog.findUnique.mockResolvedValue(LOG);
       db.readingLog.update.mockResolvedValue({});
+      db.clubBook.findUnique.mockResolvedValue(null);
       const interaction = makeInteraction({ page: 180 });
       await execute(interaction);
 
-      expect(db.readingLog.update).toHaveBeenCalled();
+      expect(db.readingLog.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ status: 'finished', progress: 100 }) })
+      );
     });
 
     test('stores progress as percentage when page given', async () => {

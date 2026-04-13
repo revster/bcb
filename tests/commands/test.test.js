@@ -1,10 +1,13 @@
 jest.mock('../../lib/scrapeBook');
+jest.mock('../../lib/botLog', () => ({ botLog: jest.fn() }));
 const scrapeBook = require('../../lib/scrapeBook');
 const { execute } = require('../../commands/test');
 
 function makeInteraction(url) {
   return {
     options: { getString: jest.fn().mockReturnValue(url) },
+    user: { id: '999', username: 'testuser' },
+    guild: { channels: { cache: { find: jest.fn().mockReturnValue(null) } } },
     reply: jest.fn().mockResolvedValue(),
     deferReply: jest.fn().mockResolvedValue(),
     editReply: jest.fn().mockResolvedValue(),
@@ -46,6 +49,7 @@ describe('/read execute', () => {
   });
 
   test('edits reply with an error message when scraping fails', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
     scrapeBook.mockRejectedValue(new Error('Could not find book metadata on page'));
     const interaction = makeInteraction(VALID_URL);
     await execute(interaction);
