@@ -20,6 +20,10 @@ const { botLog } = require('../lib/botLog');
 const GOODREADS_BOOK_RE = /^https:\/\/(www\.)?goodreads\.com\/book\/show\//;
 const CLUB_TAG_NAMES = ['Bot', 'Book Club Book'];
 const EPILOGUE_CHANNEL_NAME = 'epilogue';
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
 function buildOpeningEmbed(book) {
   const embed = new EmbedBuilder()
@@ -38,6 +42,18 @@ function buildOpeningEmbed(book) {
   return embed;
 }
 
+function buildEpilogueEmbed(book) {
+  const embed = new EmbedBuilder()
+    .setTitle(book.title)
+    .setURL(book.goodreadsUrl)
+    .setAuthor({ name: book.author })
+    .setDescription('Spoilers welcome — discuss freely once you\'ve finished.');
+
+  if (book.image) embed.setThumbnail(book.image);
+
+  return embed;
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('club-start')
@@ -45,10 +61,18 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addStringOption(o =>
       o.setName('url').setDescription('Goodreads book URL').setRequired(true)
+    )
+    .addIntegerOption(o =>
+      o.setName('month').setDescription('Month this book is for (1–12)').setMinValue(1).setMaxValue(12)
+    )
+    .addIntegerOption(o =>
+      o.setName('year').setDescription('Year this book is for (e.g. 2026)')
     ),
 
   async execute(interaction) {
     const url = interaction.options.getString('url');
+    const month = interaction.options.getInteger('month');
+    const year = interaction.options.getInteger('year');
 
     if (!GOODREADS_BOOK_RE.test(url)) {
       await interaction.reply({
@@ -78,8 +102,8 @@ module.exports = {
 
     const clubBook = await db.clubBook.upsert({
       where: { bookId: book.id },
-      update: {},
-      create: { bookId: book.id },
+      update: { ...(month !== null && { month }), ...(year !== null && { year }) },
+      create: { bookId: book.id, month, year },
     });
 
     // Create a thread in every registered member's forum channel
@@ -119,7 +143,7 @@ module.exports = {
         const botTagId = epilogueChannel.availableTags?.find(t => t.name === 'Bot')?.id;
         const epilogueThread = await epilogueChannel.threads.create({
           name: `${book.title} by ${book.author}`,
-          message: { content: `Spoilers welcome! Discuss **${book.title}** here once you've finished.` },
+          message: { embeds: [buildEpilogueEmbed(book)] },
           ...(botTagId ? { appliedTags: [botTagId] } : {}),
         });
         await db.clubBook.update({
@@ -140,7 +164,8 @@ module.exports = {
       .map((r, i) => ({ r, mc: memberChannels[i] }))
       .filter(({ r }) => r.status === 'rejected');
 
-    const lines = [`**${book.title}** is now the active club read.`];
+    const monthYearStr = (month && year) ? ` (${MONTHS[month - 1]} ${year})` : '';
+    const lines = [`**${book.title}**${monthYearStr} is now the active club read.`];
     if (created.length) lines.push(`Threads created for: ${created.join(', ')}`);
     if (epilogueUrl) lines.push(`Epilogue thread: ${epilogueUrl}`);
     if (failures.length) {

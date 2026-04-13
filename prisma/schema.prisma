@@ -130,5 +130,7 @@ model ClubBook {
   book              Book     @relation(fields: [bookId], references: [id])
   progressMessageId String?           // ID of the message in #progress channel
   epilogueThreadId  String?           // ID of the spoiler discussion thread in #epilogue
+  month             Int?              // Club read month (1–12), if specified
+  year              Int?              // Club read year, if specified
   createdAt         DateTime @default(now())
 }
