@@ -128,7 +128,8 @@ model ClubBook {
   id                Int      @id @default(autoincrement())
   bookId            Int      @unique
   book              Book     @relation(fields: [bookId], references: [id])
-  progressMessageId String?           // ID of the message in #progress channel
+  progressMessageId String?           // ID of the book embed message in #progress
+  progressBarsMessageId String?       // ID of the progress bars message in #progress (posted directly after)
   epilogueThreadId  String?           // ID of the spoiler discussion thread in #epilogue
   month             Int?              // Club read month (1–12), if specified
   year              Int?              // Club read year, if specified
