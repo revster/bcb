@@ -11,9 +11,10 @@
  * Always creates a new thread per member, even if one already exists for this book.
  */
 
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const db = require('../db');
 const scrapeBook = require('../lib/scrapeBook');
+const { buildBookEmbed } = require('../lib/buildBookEmbed');
 const { updateProgressPost } = require('../lib/progressPost');
 const { botLog } = require('../lib/botLog');
 
@@ -25,34 +26,6 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-function buildOpeningEmbed(book) {
-  const embed = new EmbedBuilder()
-    .setTitle(book.title)
-    .setURL(book.goodreadsUrl)
-    .setAuthor({ name: book.author })
-    .setDescription(`Started reading on ${new Date().toDateString()}`);
-
-  if (book.image) embed.setThumbnail(book.image);
-  if (book.rating) embed.addFields({ name: 'Goodreads Rating', value: book.rating, inline: true });
-  if (book.pages) embed.addFields({ name: 'Pages', value: String(book.pages), inline: true });
-
-  const genres = book.genres ? JSON.parse(book.genres) : [];
-  if (genres.length) embed.addFields({ name: 'Genres', value: genres.slice(0, 5).join(', ') });
-
-  return embed;
-}
-
-function buildEpilogueEmbed(book) {
-  const embed = new EmbedBuilder()
-    .setTitle(book.title)
-    .setURL(book.goodreadsUrl)
-    .setAuthor({ name: book.author })
-    .setDescription('Spoilers welcome — discuss freely once you\'ve finished.');
-
-  if (book.image) embed.setThumbnail(book.image);
-
-  return embed;
-}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -108,7 +81,7 @@ module.exports = {
 
     // Create a thread in every registered member's forum channel
     const memberChannels = await db.memberChannel.findMany();
-    const embed = buildOpeningEmbed(book);
+    const embed = buildBookEmbed(book, `Started reading on ${new Date().toDateString()}`);
 
     const results = await Promise.allSettled(
       memberChannels.map(async mc => {
@@ -143,7 +116,7 @@ module.exports = {
         const botTagId = epilogueChannel.availableTags?.find(t => t.name === 'Bot')?.id;
         const epilogueThread = await epilogueChannel.threads.create({
           name: `${book.title} by ${book.author}`,
-          message: { embeds: [buildEpilogueEmbed(book)] },
+          message: { embeds: [buildBookEmbed(book, 'Spoilers welcome — discuss freely once you\'ve finished.')] },
           ...(botTagId ? { appliedTags: [botTagId] } : {}),
         });
         await db.clubBook.update({

@@ -68,5 +68,15 @@ module.exports = {
 
     await interaction.reply({ content: `Rating saved: ${starDisplay} (${rating})`, flags: MessageFlags.Ephemeral });
     await botLog(interaction.guild, `[rate] ${interaction.user.username} — **${log.book.title}**: ${starDisplay} (${rating})`);
+
+    const clubBook = await db.clubBook.findUnique({ where: { bookId: log.bookId } });
+    if (clubBook?.epilogueThreadId) {
+      try {
+        const epilogueThread = await interaction.guild.channels.fetch(clubBook.epilogueThreadId);
+        await epilogueThread.send(`${interaction.user.username} rated **${log.book.title}**: ${starDisplay} (${rating})`);
+      } catch (err) {
+        console.error('[rate] failed to post rating in epilogue thread:', err);
+      }
+    }
   },
 };

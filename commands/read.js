@@ -11,9 +11,10 @@
  * Re-running /read for the same book starts a new log (useful for re-reads).
  */
 
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const db = require('../db');
 const scrapeBook = require('../lib/scrapeBook');
+const { buildBookEmbed } = require('../lib/buildBookEmbed');
 const { updateProgressPost } = require('../lib/progressPost');
 const { botLog } = require('../lib/botLog');
 
@@ -74,16 +75,10 @@ module.exports = {
     });
 
     // Build the opening embed posted as the thread's first message
-    const embed = new EmbedBuilder()
-      .setTitle(title)
-      .setURL(url)
-      .setAuthor({ name: author })
-      .setDescription(`Started reading on ${new Date().toDateString()}`);
-
-    if (image) embed.setThumbnail(image);
-    if (rating) embed.addFields({ name: 'Goodreads Rating', value: rating, inline: true });
-    if (pages) embed.addFields({ name: 'Pages', value: String(pages), inline: true });
-    if (genres.length) embed.addFields({ name: 'Genres', value: genres.slice(0, 5).join(', ') });
+    const embed = buildBookEmbed(
+      { title, author, rating, pages, image, genres, goodreadsUrl: url },
+      `Started reading on ${new Date().toDateString()}`
+    );
 
     // Create the thread in the member's forum channel, applying the Bot tag if it exists
     const botTagId = forumChannel.availableTags?.find(t => t.name === 'Bot')?.id;
