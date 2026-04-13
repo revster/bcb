@@ -9,6 +9,7 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const db = require('../db');
 const { updateProgressPost } = require('../lib/progressPost');
+const { botLog } = require('../lib/botLog');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -16,6 +17,15 @@ module.exports = {
     .setDescription('Mark this book as finished — run this from inside your book thread'),
 
   async execute(interaction) {
+    const botTag = interaction.channel.parent?.availableTags?.find(t => t.name === 'Bot');
+    if (!botTag || !interaction.channel.appliedTags?.includes(botTag.id)) {
+      await interaction.reply({
+        content: 'This command can only be used inside a bot-managed book thread.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     const log = await db.readingLog.findUnique({
       where: { threadId: interaction.channelId },
       include: { book: true },
@@ -74,6 +84,7 @@ module.exports = {
       content: `Marked **${log.book.title}** as finished. 🎉`,
       flags: MessageFlags.Ephemeral,
     });
+    await botLog(interaction.guild, `[finish] ${interaction.user.username} finished **${log.book.title}** by ${log.book.author}`);
 
     await updateProgressPost(log.bookId, interaction.guild);
   },

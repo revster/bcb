@@ -46,7 +46,8 @@ npx prisma generate                # Regenerate the Prisma client after schema c
 - `deploy-commands.js` — One-off script to register slash commands with Discord's API via REST. Auto-discovers all files in `commands/` so new commands are picked up automatically.
 - `db.js` — Exports a singleton `PrismaClient` instance. Import this wherever database access is needed.
 - `lib/scrapeBook.js` — Fetches a Goodreads book page and extracts metadata (title, author, rating, pages, image, genres) from the JSON-LD script tag and HTML.
-- `lib/progressPost.js` — Builds and edits the `#progress` channel post for club reads. Looks up all `ReadingLog` entries for a book, renders an ASCII progress bar per member, and edits the stored message (or creates a new one). Called by `/read`, `/progress`, `/finish`, and `/club-start`. The `#progress` channel is found by name (`"progress"`) in the guild cache — **TODO: store channel ID in DB instead for robustness.**
+- `lib/progressPost.js` — Builds and edits the `#progress` channel post for club reads. Looks up all `ReadingLog` entries for a book, deduplicates by user (keeping the most recent log per user), renders an ASCII progress bar per member, and edits the stored message (or creates a new one). Called by `/read`, `/progress`, `/finish`, and `/club-start`. The `#progress` channel is found by name (`"progress"`) in the guild cache.
+- `lib/botLog.js` — Posts a timestamped event message to the `#bot-log` channel (looked up by name). Swallows errors silently so logging never breaks a command. All commands import this.
 
 ### Commands (`commands/`)
 
@@ -63,17 +64,23 @@ Each file exports `{ data, execute }` — `data` is a `SlashCommandBuilder` and 
 | `/vote <first> <second> <third>` | features/voting | Members cast their 1st/2nd/3rd choice by number. All three must be different. Can re-run to update picks. |
 | `/voting-end` | features/voting | Admin-only. Closes voting and announces winner in `#voting`. Tiebreaker: most 1st-choice wins, then 2nd, then 3rd. |
 | `/register <user> <channel>` | reading-tracker | Admin-only. Maps a Discord member to their personal forum channel. Channel must be a forum channel. Safe to re-run to update. |
+| `/unregister <user>` | reading-tracker | Admin-only. Removes a member's forum channel registration, excluding them from future thread creation. Existing threads and reading logs are untouched. |
 | `/read <url>` | reading-tracker | Starts tracking a book. Scrapes Goodreads, creates a thread in the member's forum channel, upserts the Book record, and opens a ReadingLog. If the book is a club read, updates the #progress post. |
-| `/progress` | reading-tracker | Logs reading progress. Run from inside a book thread. Accepts `page` OR `percentage` (not both). Stored as a float percentage (0–100). Updates #progress if club read. |
-| `/rate <rating>` | reading-tracker | Rates the book 1–5 stars (decimals allowed, e.g. 4.5). Run from inside a book thread. |
-| `/finish` | reading-tracker | Marks the book as finished. Posts a completion embed in the thread. Sets progress to 100% and updates #progress if club read. |
-| `/club-start <url>` | reading-tracker | Admin-only. Designates a book as the active club read. Creates a thread in every registered member's forum channel (with "Bot" and "Book Club Book" tags if they exist on that channel, skipping tags gracefully on failure), creates ReadingLog entries, and posts/refreshes the #progress channel post. Safe to re-run. |
+| `/progress` | reading-tracker | Logs reading progress. Run from inside a bot-managed book thread. Accepts `page` OR `percentage` (not both). Stored as a float percentage (0–100). Updates #progress if club read. |
+| `/rate <rating>` | reading-tracker | Rates the book 1–5 stars (decimals allowed, e.g. 4.5). Run from inside a bot-managed book thread. |
+| `/finish` | reading-tracker | Marks the book as finished. Posts a completion embed in the thread. Sets progress to 100% and updates #progress if club read. Run from inside a bot-managed book thread. |
+| `/club-start <url>` | reading-tracker | Admin-only. Designates a book as the active club read. Always creates a new thread per registered member (even if one exists for that book), applies "Bot" and "Book Club Book" tags, creates ReadingLog entries, and posts/refreshes the #progress channel post. |
 
 ### Channel lookup patterns
 
 - **`#voting`** — looked up by name (`VOTING_CHANNEL_NAME = 'voting'`) via `guild.channels.cache.find`. Used by voting commands.
-- **`#progress`** — looked up by name (`'progress'`) via `guild.channels.cache.find` in `lib/progressPost.js`. **TODO: store channel ID in DB** (same pattern as member channels) to make it rename-proof.
+- **`#progress`** — looked up by name (`'progress'`) via `guild.channels.cache.find` in `lib/progressPost.js`.
+- **`#bot-log`** — looked up by name (`'bot-log'`) via `guild.channels.cache.find` in `lib/botLog.js`. All commands post an event here after successful execution. Create the channel in Discord and restrict access to admins + the bot role.
 - **Member forum channels** — stored by ID in `MemberChannel.channelId`. Fetched via `guild.channels.fetch(id)`.
+
+### Bot-managed thread guard
+
+`/progress`, `/rate`, and `/finish` check at the top of `execute` that the current thread has the "Bot" tag applied (looked up by name on the parent forum channel's `availableTags`). Commands silently reject if the tag is missing or the channel has no such tag.
 
 ### Thread routing pattern
 
@@ -136,12 +143,13 @@ npx prisma generate
 ### Reading tracker logic
 
 - `/register` upserts `MemberChannel` for a user. Channel must be `ChannelType.GuildForum`.
+- `/unregister` deletes the `MemberChannel` row for a user. Existing `ReadingLog` entries and threads are untouched.
 - `/read` validates the Goodreads URL, scrapes the book, looks up the member's `MemberChannel`, creates a forum thread, upserts `Book`, creates `ReadingLog`, then calls `updateProgressPost` (no-op if not a club book).
-- `/progress` accepts `page` (Integer) or `percentage` (Number), exactly one required. Page is converted to percentage using `book.pages`. Stored as `ReadingLog.progress` (Float 0–100).
-- `/rate` accepts a Number 1–5 (decimals allowed). Stored as `ReadingLog.rating` (Float).
-- `/finish` sets `status = "finished"`, `finishedAt = now()`, `progress = 100`, posts a completion embed, then calls `updateProgressPost`.
-- `/club-start` upserts `ClubBook`, creates threads in all member channels (falls back to no tags if tag application fails), creates `ReadingLog` entries for members who don't have one, then calls `updateProgressPost`.
-- `updateProgressPost` in `lib/progressPost.js` fetches all `ReadingLog` entries for the book, renders an ASCII bar per member, and edits the stored #progress message (or creates a new one and saves its ID).
+- `/progress` guards on Bot tag, then accepts `page` (Integer) or `percentage` (Number), exactly one required. Page is converted to percentage using `book.pages`. Stored as `ReadingLog.progress` (Float 0–100).
+- `/rate` guards on Bot tag, then accepts a Number 1–5 (decimals allowed). Stored as `ReadingLog.rating` (Float).
+- `/finish` guards on Bot tag, then sets `status = "finished"`, `finishedAt = now()`, `progress = 100`, posts a completion embed, then calls `updateProgressPost`.
+- `/club-start` upserts `ClubBook`, always creates a new thread per registered member (applies "Bot" and "Book Club Book" tags — errors if tags cannot be applied), creates a `ReadingLog` for each new thread, then calls `updateProgressPost`.
+- `updateProgressPost` in `lib/progressPost.js` fetches all `ReadingLog` entries for the book, deduplicates by user (most recent log wins), renders an ASCII bar per member, and edits the stored #progress message (or creates a new one and saves its ID).
 
 ## Notes
 

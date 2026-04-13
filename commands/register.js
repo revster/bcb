@@ -10,6 +10,7 @@
 
 const { SlashCommandBuilder, PermissionFlagsBits, ChannelType, MessageFlags } = require('discord.js');
 const db = require('../db');
+const { botLog } = require('../lib/botLog');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -45,5 +46,6 @@ module.exports = {
       content: `Registered <@${user.id}>'s reading channel as <#${channel.id}>.`,
       flags: MessageFlags.Ephemeral,
     });
+    await botLog(interaction.guild, `[register] ${user.username} → #${channel.name}`);
   },
 };

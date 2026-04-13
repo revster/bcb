@@ -8,6 +8,7 @@
 
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const db = require('../db');
+const { botLog } = require('../lib/botLog');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -22,6 +23,15 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    const botTag = interaction.channel.parent?.availableTags?.find(t => t.name === 'Bot');
+    if (!botTag || !interaction.channel.appliedTags?.includes(botTag.id)) {
+      await interaction.reply({
+        content: 'This command can only be used inside a bot-managed book thread.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     const rating = interaction.options.getNumber('rating');
 
     const log = await db.readingLog.findUnique({
@@ -49,5 +59,6 @@ module.exports = {
     await interaction.channel.send(starDisplay);
 
     await interaction.reply({ content: `Rating saved: ${starDisplay} (${rating})`, flags: MessageFlags.Ephemeral });
+    await botLog(interaction.guild, `[rate] ${interaction.user.username} — **${log.book.title}**: ${starDisplay} (${rating})`);
   },
 };

@@ -12,6 +12,7 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const db = require('../db');
 const { updateProgressPost } = require('../lib/progressPost');
+const { botLog } = require('../lib/botLog');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -25,6 +26,15 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    const botTag = interaction.channel.parent?.availableTags?.find(t => t.name === 'Bot');
+    if (!botTag || !interaction.channel.appliedTags?.includes(botTag.id)) {
+      await interaction.reply({
+        content: 'This command can only be used inside a bot-managed book thread.',
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     const page = interaction.options.getInteger('page');
     const percentage = interaction.options.getNumber('percentage');
 
@@ -97,6 +107,7 @@ module.exports = {
 
     await interaction.channel.send(`📖 Progress updated: ${progressDisplay}`);
     await interaction.reply({ content: 'Progress logged!', flags: MessageFlags.Ephemeral });
+    await botLog(interaction.guild, `[progress] ${interaction.user.username} — **${log.book.title}**: ${progressDisplay}`);
 
     await updateProgressPost(log.bookId, interaction.guild);
   },

@@ -5,16 +5,17 @@
  *   1. Upserts the Book + ClubBook records.
  *   2. Creates a thread in every registered member's personal forum channel,
  *      applying the "Bot" and "Book Club Book" tags if they exist on that channel.
- *   3. Creates a ReadingLog for each member (skips any who already have one).
+ *   3. Creates a ReadingLog for each new thread.
  *   4. Creates or refreshes the #progress channel post.
  *
- * Safe to re-run — members who already have a thread for this book are skipped.
+ * Always creates a new thread per member, even if one already exists for this book.
  */
 
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const db = require('../db');
 const scrapeBook = require('../lib/scrapeBook');
 const { updateProgressPost } = require('../lib/progressPost');
+const { botLog } = require('../lib/botLog');
 
 const GOODREADS_BOOK_RE = /^https:\/\/(www\.)?goodreads\.com\/book\/show\//;
 const CLUB_TAG_NAMES = ['Bot', 'Book Club Book'];
@@ -86,12 +87,6 @@ module.exports = {
 
     const results = await Promise.allSettled(
       memberChannels.map(async mc => {
-        // Skip if this member already has a reading log for this book
-        const existing = await db.readingLog.findFirst({
-          where: { userId: mc.userId, bookId: book.id },
-        });
-        if (existing) return { username: mc.username, status: 'skipped' };
-
         const forumChannel = await interaction.guild.channels.fetch(mc.channelId);
 
         // Collect tag IDs for any matching tag names that exist on this channel
@@ -105,17 +100,7 @@ module.exports = {
           message: { embeds: [embed] },
         };
 
-        // Try with tags first; fall back to without if the channel doesn't support them
-        let thread;
-        if (appliedTags.length > 0) {
-          try {
-            thread = await forumChannel.threads.create({ ...threadOptions, appliedTags });
-          } catch {
-            thread = await forumChannel.threads.create(threadOptions);
-          }
-        } else {
-          thread = await forumChannel.threads.create(threadOptions);
-        }
+        const thread = await forumChannel.threads.create({ ...threadOptions, appliedTags });
 
         await db.readingLog.create({
           data: { userId: mc.userId, bookId: book.id, threadId: thread.id },
@@ -129,10 +114,7 @@ module.exports = {
 
     // Build a human-readable summary for the admin
     const created = results
-      .filter(r => r.status === 'fulfilled' && r.value.status === 'created')
-      .map(r => r.value.username);
-    const skipped = results
-      .filter(r => r.status === 'fulfilled' && r.value.status === 'skipped')
+      .filter(r => r.status === 'fulfilled')
       .map(r => r.value.username);
     const failures = results
       .map((r, i) => ({ r, mc: memberChannels[i] }))
@@ -140,7 +122,6 @@ module.exports = {
 
     const lines = [`**${book.title}** is now the active club read.`];
     if (created.length) lines.push(`Threads created for: ${created.join(', ')}`);
-    if (skipped.length) lines.push(`Already had a thread (skipped): ${skipped.join(', ')}`);
     if (failures.length) {
       for (const { r, mc } of failures) {
         console.error(`club-start: failed for ${mc.username} (channel ${mc.channelId}):`, r.reason);
@@ -149,5 +130,10 @@ module.exports = {
     }
 
     await interaction.editReply(lines.join('\n'));
+
+    const logParts = [`[club-start] **${book.title}** by ${book.author}`];
+    if (created.length) logParts.push(`threads created: ${created.join(', ')}`);
+    if (failures.length) logParts.push(`failed: ${failures.map(({ mc }) => mc.username).join(', ')}`);
+    await botLog(interaction.guild, logParts.join(' — '));
   },
 };

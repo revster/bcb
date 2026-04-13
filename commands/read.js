@@ -15,6 +15,7 @@ const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js'
 const db = require('../db');
 const scrapeBook = require('../lib/scrapeBook');
 const { updateProgressPost } = require('../lib/progressPost');
+const { botLog } = require('../lib/botLog');
 
 const GOODREADS_BOOK_RE = /^https:\/\/(www\.)?goodreads\.com\/book\/show\//;
 
@@ -100,6 +101,7 @@ module.exports = {
     });
 
     await interaction.editReply(`Your thread for **${title}** is live! [Jump to thread](${thread.url})`);
+    await botLog(interaction.guild, `[read] ${interaction.user.username} started **${title}** by ${author}`);
 
     await updateProgressPost(book.id, interaction.guild);
   },

@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const scrapeBook = require('../lib/scrapeBook');
+const { botLog } = require('../lib/botLog');
 
 const GOODREADS_BOOK_RE = /^https:\/\/(www\.)?goodreads\.com\/book\/show\//;
 
@@ -42,6 +43,7 @@ module.exports = {
       if (genres.length) embed.addFields({ name: 'Genres', value: genres.slice(0, 5).join(', ') });
 
       await interaction.editReply({ embeds: [embed] });
+      await botLog(interaction.guild, `[test] ${interaction.user.username} scraped **${title}** by ${author}`);
     } catch (err) {
       console.error('scrapeBook error:', err);
       await interaction.editReply('Could not fetch book info. The Goodreads link may be invalid or the page is unavailable.');
