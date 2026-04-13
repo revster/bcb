@@ -3,11 +3,12 @@
  *
  * Updates the member's reading progress. Accepts either a page number OR a
  * percentage (0–100) — exactly one is required. Progress is stored as a
- * percentage in the database.
+ * float percentage in the database.
  *
- * When progress reaches 100, automatically marks the book as finished:
- * posts a completion embed, links to the epilogue thread if a club read,
- * and updates #progress.
+ * Special cases:
+ *   - Progress = 100: automatically marks the book as finished, posts a
+ *     completion embed, and links to the epilogue thread if a club read.
+ *   - Book was abandoned: logging progress resumes it (status → "reading").
  *
  * Must be run from inside a bot-managed book thread owned by the user.
  */

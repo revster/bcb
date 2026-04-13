@@ -1,14 +1,15 @@
 /**
- * commands/club-start.js — /club-start <url>
+ * commands/club-start.js — /club-start <url> [month] [year]
  *
  * Admin-only. Designates a Goodreads book as the active club read:
- *   1. Upserts the Book + ClubBook records.
- *   2. Creates a thread in every registered member's personal forum channel,
- *      applying the "Bot" and "Book Club Book" tags if they exist on that channel.
+ *   1. Scrapes (or reuses) the Book record; upserts ClubBook with optional
+ *      month/year for display in #progress.
+ *   2. Always creates a new thread in every registered member's forum channel,
+ *      applying "Bot" and "Book Club Book" tags (errors if tags cannot be applied).
  *   3. Creates a ReadingLog for each new thread.
- *   4. Creates or refreshes the #progress channel post.
- *
- * Always creates a new thread per member, even if one already exists for this book.
+ *   4. Creates a spoiler discussion thread in #epilogue (once per club book;
+ *      skipped on re-runs if epilogueThreadId is already stored).
+ *   5. Creates or refreshes the two #progress messages (embed + bars).
  */
 
 const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
@@ -144,7 +145,7 @@ module.exports = {
     if (failures.length) {
       for (const { r, mc } of failures) {
         console.error(`club-start: failed for ${mc.username} (channel ${mc.channelId}):`, r.reason);
-        lines.push(`⚠️ Failed for **${mc.username}**: ${r.reason?.message ?? r.reason}`);
+        lines.push(`⚠️ Failed for **${mc.username}**: ${r.reason?.message ?? String(r.reason)}`);
       }
     }
 

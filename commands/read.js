@@ -65,7 +65,11 @@ module.exports = {
     }
 
     // Fetch the forum channel from Discord
-    const forumChannel = await interaction.guild.channels.fetch(memberChannel.channelId);
+    const forumChannel = await interaction.guild.channels.fetch(memberChannel.channelId).catch(() => null);
+    if (!forumChannel) {
+      await interaction.editReply("Your reading channel no longer exists or I can't access it. Ask an admin to update your registration with `/register`.");
+      return;
+    }
 
     // Upsert the book record
     const book = await db.book.upsert({

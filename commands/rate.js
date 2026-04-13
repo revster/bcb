@@ -1,9 +1,14 @@
 /**
  * commands/rate.js — /rate <rating>
  *
- * Saves a 1–5 star rating for the current book and posts it in the thread.
- * Must be run from inside a book thread created by /read.
- * Can be updated by running again.
+ * Saves a 1–5 star rating (decimals allowed) for the current book and posts
+ * it in the thread. Can be run at any point — reading, finished, or abandoned.
+ * Re-running overwrites the previous rating.
+ *
+ * If the book is an active club read, also posts the rating in the epilogue
+ * thread so members who have finished can see it.
+ *
+ * Must be run from inside a bot-managed book thread owned by the user.
  */
 
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');

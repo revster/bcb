@@ -43,14 +43,14 @@ module.exports = {
       update: {
         openToAll: !nominatorUser,
         nominatorId: nominatorUser?.id ?? null,
-        nominatorName: nominatorUser?.displayName ?? null,
+        nominatorName: nominatorUser ? (nominatorUser.displayName ?? nominatorUser.username) : null,
       },
       create: {
         month,
         year,
         openToAll: !nominatorUser,
         nominatorId: nominatorUser?.id ?? null,
-        nominatorName: nominatorUser?.displayName ?? null,
+        nominatorName: nominatorUser ? (nominatorUser.displayName ?? nominatorUser.username) : null,
       },
     });
 
