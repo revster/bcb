@@ -69,13 +69,14 @@ Each file exports `{ data, execute }` — `data` is a `SlashCommandBuilder` and 
 | `/progress` | reading-tracker | Logs reading progress. Run from inside a bot-managed book thread. Accepts `page` OR `percentage` (not both). Stored as a float percentage (0–100). Updates #progress if club read. |
 | `/rate <rating>` | reading-tracker | Rates the book 1–5 stars (decimals allowed, e.g. 4.5). Run from inside a bot-managed book thread. |
 | `/finish` | reading-tracker | Marks the book as finished. Posts a completion embed in the thread. Sets progress to 100% and updates #progress if club read. Run from inside a bot-managed book thread. |
-| `/club-start <url>` | reading-tracker | Admin-only. Designates a book as the active club read. Always creates a new thread per registered member (even if one exists for that book), applies "Bot" and "Book Club Book" tags, creates ReadingLog entries, and posts/refreshes the #progress channel post. |
+| `/club-start <url>` | reading-tracker | Admin-only. Designates a book as the active club read. Always creates a new thread per registered member (even if one exists for that book), applies "Bot" and "Book Club Book" tags, creates ReadingLog entries, posts/refreshes the #progress channel post, and creates a spoiler discussion thread in #epilogue (once per club book). |
 
 ### Channel lookup patterns
 
 - **`#voting`** — looked up by name (`VOTING_CHANNEL_NAME = 'voting'`) via `guild.channels.cache.find`. Used by voting commands.
 - **`#progress`** — looked up by name (`'progress'`) via `guild.channels.cache.find` in `lib/progressPost.js`.
 - **`#bot-log`** — looked up by name (`'bot-log'`) via `guild.channels.cache.find` in `lib/botLog.js`. All commands post an event here after successful execution. Create the channel in Discord and restrict access to admins + the bot role.
+- **`#epilogue`** — looked up by name (`'epilogue'`) in `/club-start`. One spoiler discussion thread is created here per club book and its ID stored in `ClubBook.epilogueThreadId`. `/finish` links to it after marking a book done.
 - **Member forum channels** — stored by ID in `MemberChannel.channelId`. Fetched via `guild.channels.fetch(id)`.
 
 ### Bot-managed thread guard
@@ -125,7 +126,7 @@ npx prisma generate
 | `ReadingProgress` | A member's page progress through the current book (legacy model). |
 | `MemberChannel` | Maps a Discord user (snowflake) to their personal forum channel ID. Set by `/register`. `userId` and `channelId` are both `@unique`. |
 | `ReadingLog` | One entry per member per book thread. `threadId` is `@unique` and routes `/progress`, `/rate`, `/finish`. Stores `progress` (Float, 0–100), `rating` (Float?, 1–5), `status` ("reading"\|"finished"), `startedAt`, `finishedAt`. |
-| `ClubBook` | Marks a book as a community club read. Stores `progressMessageId` — the Discord message ID of the #progress post for that book. One record per book (`bookId @unique`). |
+| `ClubBook` | Marks a book as a community club read. Stores `progressMessageId` (Discord message ID of the #progress post) and `epilogueThreadId` (Discord thread ID of the #epilogue spoiler discussion thread). One record per book (`bookId @unique`). |
 
 ### Nomination logic
 
@@ -147,8 +148,8 @@ npx prisma generate
 - `/read` validates the Goodreads URL, scrapes the book, looks up the member's `MemberChannel`, creates a forum thread, upserts `Book`, creates `ReadingLog`, then calls `updateProgressPost` (no-op if not a club book).
 - `/progress` guards on Bot tag, then accepts `page` (Integer) or `percentage` (Number), exactly one required. Page is converted to percentage using `book.pages`. Stored as `ReadingLog.progress` (Float 0–100).
 - `/rate` guards on Bot tag, then accepts a Number 1–5 (decimals allowed). Stored as `ReadingLog.rating` (Float).
-- `/finish` guards on Bot tag, then sets `status = "finished"`, `finishedAt = now()`, `progress = 100`, posts a completion embed, then calls `updateProgressPost`.
-- `/club-start` upserts `ClubBook`, always creates a new thread per registered member (applies "Bot" and "Book Club Book" tags — errors if tags cannot be applied), creates a `ReadingLog` for each new thread, then calls `updateProgressPost`.
+- `/finish` guards on Bot tag, then sets `status = "finished"`, `finishedAt = now()`, `progress = 100`, posts a completion embed, links to the epilogue thread if the book is a club read, then calls `updateProgressPost`.
+- `/club-start` upserts `ClubBook`, always creates a new thread per registered member (applies "Bot" and "Book Club Book" tags — errors if tags cannot be applied), creates a `ReadingLog` for each new thread, calls `updateProgressPost`, and creates a spoiler discussion thread in `#epilogue` if `ClubBook.epilogueThreadId` is not yet set (applies "Bot" tag if available, falls back silently).
 - `updateProgressPost` in `lib/progressPost.js` fetches all `ReadingLog` entries for the book, deduplicates by user (most recent log wins), renders an ASCII bar per member, and edits the stored #progress message (or creates a new one and saves its ID).
 
 ## Notes
