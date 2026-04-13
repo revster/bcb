@@ -5,13 +5,16 @@
   "scripts": {
     "test": "jest"
   },
+  "jest": {
+    "testMatch": ["**/tests/**/*.test.js"]
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/revster/bcb.git"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/revster/bcb/issues"
   },

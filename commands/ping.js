@@ -1,4 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
+const { botLog } = require('../lib/botLog');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -7,5 +8,6 @@ module.exports = {
 
   async execute(interaction) {
     await interaction.reply('Pong! 🏓');
+    await botLog(interaction.guild, `[ping] ${interaction.user.username} checked bot health`);
   },
 };

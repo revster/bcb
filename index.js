@@ -3,6 +3,8 @@ const { Client, GatewayIntentBits, Collection, MessageFlags } = require('discord
 const fs = require('fs');
 const path = require('path');
 
+const db = require('./db');
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -32,6 +34,13 @@ client.on('interactionCreate', async interaction => {
 
   const command = client.commands.get(interaction.commandName);
   if (!command) return;
+
+  // Fire-and-forget: keep a userId → username record, updated on every interaction
+  db.user.upsert({
+    where: { userId: interaction.user.id },
+    update: { username: interaction.user.username },
+    create: { userId: interaction.user.id, username: interaction.user.username },
+  }).catch(() => {});
 
   try {
     await command.execute(interaction);

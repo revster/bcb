@@ -22,6 +22,8 @@ model Book {
 
   nominations  Nomination[]
   currentBook  CurrentBook?
+  readingLogs  ReadingLog[]
+  clubBook     ClubBook?
 }
 
 // Admin-configured nomination period for a given month
@@ -95,4 +97,48 @@ model ReadingProgress {
   updatedAt     DateTime    @updatedAt
 
   @@unique([currentBookId, userId]) // one progress entry per user per book
+}
+
+// Known Discord users — upserted on every command interaction
+model User {
+  userId    String   @id                // Discord snowflake
+  username  String                      // Most recent username seen
+  updatedAt DateTime @updatedAt
+}
+
+// Maps a Discord member to their personal reading forum channel
+model MemberChannel {
+  id        Int      @id @default(autoincrement())
+  userId    String   @unique          // Discord snowflake
+  username  String                    // Display name at time of registration
+  channelId String   @unique          // Discord forum channel ID
+  createdAt DateTime @default(now())
+}
+
+// A member's personal reading log for a single book
+model ReadingLog {
+  id          Int       @id @default(autoincrement())
+  userId      String
+  bookId      Int
+  book        Book      @relation(fields: [bookId], references: [id])
+  threadId    String    @unique       // Discord thread ID — routes /progress, /rate, /finish
+  status      String    @default("reading")  // "reading" | "finished" | "abandoned"
+  progress    Float     @default(0)   // 0–100 percentage
+  rating      Float?                  // 1–5 (decimals allowed), set by /rate
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  updatedAt   DateTime  @updatedAt
+}
+
+// A book designated as an active club read (voted by community or set by admin)
+model ClubBook {
+  id                Int      @id @default(autoincrement())
+  bookId            Int      @unique
+  book              Book     @relation(fields: [bookId], references: [id])
+  progressMessageId String?           // ID of the book embed message in #progress
+  progressBarsMessageId String?       // ID of the progress bars message in #progress (posted directly after)
+  epilogueThreadId  String?           // ID of the spoiler discussion thread in #epilogue
+  month             Int?              // Club read month (1–12), if specified
+  year              Int?              // Club read year, if specified
+  createdAt         DateTime @default(now())
 }
