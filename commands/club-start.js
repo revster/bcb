@@ -19,6 +19,7 @@ const { botLog } = require('../lib/botLog');
 
 const GOODREADS_BOOK_RE = /^https:\/\/(www\.)?goodreads\.com\/book\/show\//;
 const CLUB_TAG_NAMES = ['Bot', 'Book Club Book'];
+const EPILOGUE_CHANNEL_NAME = 'epilogue';
 
 function buildOpeningEmbed(book) {
   const embed = new EmbedBuilder()
@@ -75,7 +76,7 @@ module.exports = {
       });
     }
 
-    await db.clubBook.upsert({
+    const clubBook = await db.clubBook.upsert({
       where: { bookId: book.id },
       update: {},
       create: { bookId: book.id },
@@ -110,6 +111,25 @@ module.exports = {
       })
     );
 
+    // Create the epilogue discussion thread if it doesn't already exist
+    let epilogueUrl = null;
+    if (!clubBook.epilogueThreadId) {
+      const epilogueChannel = interaction.guild.channels.cache.find(c => c.name === EPILOGUE_CHANNEL_NAME);
+      if (epilogueChannel) {
+        const botTagId = epilogueChannel.availableTags?.find(t => t.name === 'Bot')?.id;
+        const epilogueThread = await epilogueChannel.threads.create({
+          name: `${book.title} by ${book.author}`,
+          message: { content: `Spoilers welcome! Discuss **${book.title}** here once you've finished.` },
+          ...(botTagId ? { appliedTags: [botTagId] } : {}),
+        });
+        await db.clubBook.update({
+          where: { bookId: book.id },
+          data: { epilogueThreadId: epilogueThread.id },
+        });
+        epilogueUrl = epilogueThread.url;
+      }
+    }
+
     await updateProgressPost(book.id, interaction.guild);
 
     // Build a human-readable summary for the admin
@@ -122,6 +142,7 @@ module.exports = {
 
     const lines = [`**${book.title}** is now the active club read.`];
     if (created.length) lines.push(`Threads created for: ${created.join(', ')}`);
+    if (epilogueUrl) lines.push(`Epilogue thread: ${epilogueUrl}`);
     if (failures.length) {
       for (const { r, mc } of failures) {
         console.error(`club-start: failed for ${mc.username} (channel ${mc.channelId}):`, r.reason);

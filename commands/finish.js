@@ -80,6 +80,12 @@ module.exports = {
 
     await interaction.channel.send({ embeds: [embed] });
 
+    const clubBook = await db.clubBook.findUnique({ where: { bookId: log.bookId } });
+    if (clubBook?.epilogueThreadId) {
+      const epilogueUrl = `https://discord.com/channels/${interaction.guildId}/${clubBook.epilogueThreadId}`;
+      await interaction.channel.send(`Ready to discuss? Head to the epilogue thread: ${epilogueUrl}`);
+    }
+
     await interaction.reply({
       content: `Marked **${log.book.title}** as finished. 🎉`,
       flags: MessageFlags.Ephemeral,
