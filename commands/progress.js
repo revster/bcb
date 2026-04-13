@@ -78,9 +78,9 @@ module.exports = {
       return;
     }
 
-    if (log.status === 'finished' || log.status === 'abandoned') {
+    if (log.status === 'finished') {
       await interaction.reply({
-        content: `**${log.book.title}** is already marked as ${log.status}.`,
+        content: `**${log.book.title}** is already marked as finished.`,
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -154,14 +154,16 @@ module.exports = {
       });
       await botLog(interaction.guild, `[finish] ${interaction.user.username} finished **${log.book.title}** by ${log.book.author}`);
     } else {
+      const wasAbandoned = log.status === 'abandoned';
       await db.readingLog.update({
         where: { threadId: interaction.channelId },
-        data: { progress },
+        data: { progress, ...(wasAbandoned && { status: 'reading' }) },
       });
 
-      await interaction.channel.send(`📖 Progress updated: ${progressDisplay}`);
-      await interaction.reply({ content: 'Progress logged!', flags: MessageFlags.Ephemeral });
-      await botLog(interaction.guild, `[progress] ${interaction.user.username} — **${log.book.title}**: ${progressDisplay}`);
+      const resumedNote = wasAbandoned ? ' (resumed)' : '';
+      await interaction.channel.send(`📖 Progress updated: ${progressDisplay}${resumedNote}`);
+      await interaction.reply({ content: `Progress logged!${resumedNote}`, flags: MessageFlags.Ephemeral });
+      await botLog(interaction.guild, `[progress] ${interaction.user.username} — **${log.book.title}**: ${progressDisplay}${resumedNote}`);
     }
 
     await updateProgressPost(log.bookId, interaction.guild);
