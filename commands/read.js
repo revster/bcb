@@ -85,10 +85,12 @@ module.exports = {
     if (pages) embed.addFields({ name: 'Pages', value: String(pages), inline: true });
     if (genres.length) embed.addFields({ name: 'Genres', value: genres.slice(0, 5).join(', ') });
 
-    // Create the thread in the member's forum channel
+    // Create the thread in the member's forum channel, applying the Bot tag if it exists
+    const botTagId = forumChannel.availableTags?.find(t => t.name === 'Bot')?.id;
     const thread = await forumChannel.threads.create({
       name: `${title} by ${author}`,
       message: { embeds: [embed] },
+      ...(botTagId ? { appliedTags: [botTagId] } : {}),
     });
 
     // Open the reading log
