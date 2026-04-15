@@ -39,6 +39,27 @@ function avgRatingStr(logs) {
   return (rated.reduce((sum, l) => sum + l.rating, 0) / rated.length).toFixed(2);
 }
 
+/**
+ * Deduplicates logs by bookId, keeping one effective status per book.
+ * Priority: finished > reading > abandoned.
+ * Logs must be pre-sorted by startedAt asc so the last entry per book
+ * carries the most recent book metadata.
+ */
+function deduplicateByBook(logs) {
+  const groups = new Map();
+  for (const log of logs) {
+    const g = groups.get(log.bookId);
+    if (!g) { groups.set(log.bookId, { log, statuses: [log.status] }); }
+    else     { g.log = log; g.statuses.push(log.status); }
+  }
+  return [...groups.values()].map(({ log, statuses }) => ({
+    ...log,
+    status: statuses.includes('finished') ? 'finished'
+           : statuses.includes('reading')  ? 'reading'
+           : 'abandoned',
+  }));
+}
+
 async function buildStatsEmbed(userId, displayName) {
   const [logs, clubBookRows] = await Promise.all([
     db.readingLog.findMany({
@@ -53,18 +74,21 @@ async function buildStatsEmbed(userId, displayName) {
 
   const clubBookIds = new Set(clubBookRows.map(cb => cb.bookId));
 
-  const allFinished  = logs.filter(l => l.status === 'finished');
-  const allReading   = logs.filter(l => l.status === 'reading');
-  const allAbandoned = logs.filter(l => l.status === 'abandoned');
+  // Deduplicate by book so re-run club-start threads don't inflate counts
+  const uniqueLogs     = deduplicateByBook(logs);
+  const clubUniqueLogs = uniqueLogs.filter(l => clubBookIds.has(l.bookId));
 
-  const clubLogs     = logs.filter(l => clubBookIds.has(l.bookId));
-  const clubFinished = clubLogs.filter(l => l.status === 'finished');
-  const clubAbandoned = clubLogs.filter(l => l.status === 'abandoned');
+  const allFinished  = uniqueLogs.filter(l => l.status === 'finished');
+  const allReading   = uniqueLogs.filter(l => l.status === 'reading');
+  const allAbandoned = uniqueLogs.filter(l => l.status === 'abandoned');
+
+  const clubFinished  = clubUniqueLogs.filter(l => l.status === 'finished');
+  const clubAbandoned = clubUniqueLogs.filter(l => l.status === 'abandoned');
 
   const totalPages = allFinished.reduce((sum, l) => sum + (l.book.pages || 0), 0);
   const genre      = favouriteGenre(allFinished.map(l => l.book));
-  const allAvgRating  = avgRatingStr(logs);
-  const clubAvgRating = avgRatingStr(clubLogs);
+  const allAvgRating  = avgRatingStr(logs);        // all logs: ratings are per-thread, not per-book
+  const clubAvgRating = avgRatingStr(logs.filter(l => clubBookIds.has(l.bookId)));
 
   const embed = new EmbedBuilder()
     .setTitle(`📚 ${displayName}'s Reading Stats`);
@@ -89,8 +113,8 @@ async function buildStatsEmbed(userId, displayName) {
   }
 
   // ── Book of the Month ──────────────────────────────────────────────────────
-  if (clubLogs.length > 0) {
-    const enrolled = clubLogs.length;
+  if (clubUniqueLogs.length > 0) {
+    const enrolled = clubUniqueLogs.length;
     const rate = Math.round((clubFinished.length / enrolled) * 100);
 
     const clubCounts = [
