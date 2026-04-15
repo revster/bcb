@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Rules
+
+- **Never add `Co-Authored-By` trailers to git commits.** The sole contributor on this repo is the human owner. Do not include any Claude co-author lines in commit messages.
+
 ## Purpose
 
 A Discord bot for managing a book club server. Core features:
