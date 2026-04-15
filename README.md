@@ -23,19 +23,48 @@ carol    ██████░░░░░░░░░░░░░░   31%
 
 When a member finishes (progress hits 100%), the bot posts a completion embed in their thread and links to the `#epilogue` spoiler channel. Ratings posted via `/rate` are also shared in `#epilogue` so everyone who's finished can see them.
 
+### Reports
+A suite of commands for reviewing reading history across the club:
+
+- `/stats` — personal reading summary (finished/reading/abandoned counts, total pages, avg rating, favourite genre, and a separate breakdown for club reads). Pass a user to look up someone else.
+- `/leaderboard` — all-time club read completion ranking. Add a year for a grid showing who finished each month's pick.
+- `/finishers` — ranks members by club reads completed, with enrolled count and completion rate.
+- `/abandoners` — ranks members by club reads abandoned, with abandonment rate.
+- `/abandoned` — ranks club books by how many members abandoned them.
+
+All report commands handle re-runs of `/club-start` correctly — a member who has a `finished` log for a book is never double-counted as also `reading` it.
+
 ## Commands
 
-| Command | Who | Description |
-|---|---|---|
-| `/register <user> <channel>` | Admin | Map a member to their personal forum channel |
-| `/unregister <user>` | Admin | Remove a member from club tracking (threads/logs kept) |
-| `/club-start <url> [month] [year]` | Admin | Start a club read — creates threads for all members, opens epilogue thread, initialises `#progress` |
-| `/read <url>` | Member | Start tracking a personal book — creates a thread in your forum channel |
-| `/progress [page] [percentage]` | Member | Log reading progress from inside your book thread |
-| `/rate <rating>` | Member | Rate the book 1–5 stars (decimals allowed) from inside your book thread |
-| `/abandon` | Member | Mark the current book as abandoned |
-| `/ping` | Anyone | Health check |
-| `/test <url>` | Anyone | Preview Goodreads metadata for a URL (dev tool) |
+### Admin
+| Command | Description |
+|---|---|
+| `/register <user> <channel>` | Map a member to their personal forum channel |
+| `/unregister <user>` | Remove a member from club tracking (threads/logs kept) |
+| `/club-start <url> [month] [year]` | Start a club read — creates threads for all members, opens epilogue thread, initialises `#progress` |
+
+### Member
+| Command | Description |
+|---|---|
+| `/read <url>` | Start tracking a personal book — creates a thread in your forum channel |
+| `/progress [page] [percentage]` | Log reading progress from inside your book thread |
+| `/rate <rating>` | Rate the book 1–5 stars (decimals allowed) from inside your book thread |
+| `/abandon` | Mark the current book as abandoned |
+
+### Reports
+| Command | Description |
+|---|---|
+| `/stats [user]` | Personal reading summary — all reads + club read breakdown |
+| `/leaderboard [year]` | Club read completion ranking; year shows a month-by-month grid |
+| `/finishers [year]` | Members ranked by club reads completed |
+| `/abandoners [year]` | Members ranked by club reads abandoned |
+| `/abandoned` | Club books ranked by how many members abandoned them |
+
+### Utility
+| Command | Description |
+|---|---|
+| `/ping` | Health check |
+| `/test <url>` | Preview Goodreads metadata for a URL (dev tool) |
 
 ## Setup
 

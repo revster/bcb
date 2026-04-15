@@ -12,9 +12,11 @@ A Discord bot for managing a book club server. Core features:
 
 ## Branches
 
-- `main` — stable base (original bot: `/ping`, `/read`, `/setup`)
-- `features/voting` — nominations and ranked voting system
-- `features/reading-tracker` — **active branch**; personal reading tracker + club read tracking
+- `main` — stable; contains all merged features to date
+- `features/voting` — nominations and ranked voting system (not yet merged)
+- `features/reading-tracker` — personal reading tracker + club read tracking (merged into main)
+- `features/reports` — report commands /stats, /leaderboard, /finishers, /abandoners, /abandoned (merged into main)
+- `features/website` — admin web panel with Discord OAuth2 (in progress, not yet merged)
 
 **The `dev.db` file is not tracked by git.** Its schema reflects whichever migrations have been run locally, regardless of which branch is checked out. If the live database is out of sync with the checked-out branch's `prisma/schema.prisma`, run `npx prisma db push --accept-data-loss` (dev) or `npx prisma migrate dev` (prod-safe) to bring it in line.
 
@@ -50,6 +52,7 @@ npx prisma generate                    # Regenerate the Prisma client after sche
 - `lib/buildBookEmbed.js` — Single source of truth for the book info embed. Used by `/read`, `/club-start` (member threads + epilogue), `/abandon`, and `progressPost.js`. Accepts genres as either an array (scraped data) or a JSON string (DB record).
 - `lib/progressPost.js` — Maintains the two-message `#progress` post for club books. Message 1 is the book embed; message 2 is the monospace progress bar block. Both message IDs are stored on `ClubBook` and edited in-place; if either is missing both are recreated. Deduplicates by user (most recent log per user). Called after any command that changes reading status or progress.
 - `lib/botLog.js` — Posts a timestamped (`HH:MM:SS UTC`) event to `#bot-log` (looked up by name in guild cache). Swallows errors silently so logging never breaks a command. Imported by every command.
+- `lib/resolveUsernames.js` — Merges `User` and `MemberChannel` tables to map Discord user IDs to display names. `User` table wins (more recent). Used by `/leaderboard`, `/finishers`, `/abandoners`.
 
 ### Commands (`commands/`)
 
@@ -66,6 +69,11 @@ Each file exports `{ data, execute }` — `data` is a `SlashCommandBuilder` and 
 | `/rate <rating>` | Rates the book 1–5 stars (decimals allowed). Works at any status (reading, finished, abandoned). Posts rating in thread and, if a club read, in the epilogue thread. |
 | `/abandon` | Marks the book as abandoned at current progress. Shows `✗` in `#progress`. |
 | `/club-start <url> [month] [year]` | Admin. Designates a book as the active club read. Always creates a new thread per registered member with "Bot" and "Book of the Month" tags (errors if tags fail). Optional `month`/`year` displayed in `#progress`. Creates a spoiler discussion thread in `#epilogue` once per club book. |
+| `/stats [user]` | Personal reading summary. Defaults to caller; pass a user to look up someone else. Two sections: All Reads (finished/reading/abandoned counts, total pages, avg rating, favourite genre) and Book of the Month (completion rate, avg rating for club reads). Omits BOTM section if user has no club logs. Deduplicates by bookId using status priority: finished > reading > abandoned. |
+| `/leaderboard [year]` | Without year: ranked list of members by total BOTM completions (all time). With year: monospace grid of members × months showing who finished each club read. |
+| `/finishers [year]` | Ranks members by number of club reads completed. Shows finished count, enrolled count, completion rate. Optional year filter. Competition ranking (1,1,3). |
+| `/abandoners [year]` | Ranks members by number of club reads abandoned. Shows abandoned count, enrolled count, abandonment rate. Optional year filter. Competition ranking. |
+| `/abandoned` | Ranks club books by how many members abandoned them. Shows title, author, month/year, abandoned/enrolled ratio. Competition ranking. |
 
 ### Discord channels (all looked up by name, never stored by ID)
 
@@ -98,6 +106,10 @@ if (!log) {
 }
 ```
 
+### Report deduplication logic
+
+`/club-start` re-runs create a new `ReadingLog` with `status='reading'` for the same book. All report commands handle this by grouping logs per `userId:bookId` and applying status priority: **finished > reading > abandoned**. A book counts as finished if *any* log for that user+book has `status='finished'`, regardless of log order. This prevents phantom inflation of reading/abandoned counts from re-run threads.
+
 ### Adding a new slash command
 
 1. Create `commands/<name>.js` exporting `{ data, execute }`.
@@ -124,7 +136,9 @@ npx prisma generate
 | `ReadingLog` | One entry per member per book thread. `threadId` is `@unique` and routes `/progress`, `/rate`, `/abandon`. Fields: `progress` (Float 0–100), `rating` (Float? 1–5), `status` (`"reading"` \| `"finished"` \| `"abandoned"`), `startedAt`, `finishedAt`. Multiple logs per user+book are allowed (re-reads). |
 | `ClubBook` | Marks a book as a club read. Stores `progressMessageId` and `progressBarsMessageId` (the two `#progress` messages), `epilogueThreadId` (the `#epilogue` spoiler thread), and optional `month`/`year` for display. |
 
-### Models present in schema but unused on this branch
+| `User` | Known Discord users. Upserted on every command interaction (`userId`, `username`, `updatedAt`). Used by report commands to resolve display names. |
+
+### Models present in schema but unused on main
 
 `NominationPeriod`, `Nomination`, `Poll`, `PollVote`, `CurrentBook`, `ReadingProgress` — these belong to `features/voting` or are legacy models. Do not remove them; they share the same schema file.
 
