@@ -3,21 +3,20 @@
  *
  * Personal reading summary. Defaults to the caller; pass a user to look up
  * someone else.
- *   - Books finished, currently reading, and abandoned
- *   - Total pages read (finished books with known page counts)
- *   - Average rating given (logs where a rating was set)
- *   - Favourite genre (most common genre across finished books)
+ *
+ * Two sections:
+ *   All Reads — finished/reading/abandoned counts, total pages, avg rating,
+ *               favourite genre (across all personal and club reads)
+ *   Book of the Month — finished/abandoned counts, completion rate
+ *                       (finished ÷ enrolled), avg rating for club reads only.
+ *                       Omitted entirely if the user has no club read logs.
  *
  * Re-reads are counted as separate entries.
  */
 
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const db = require('../db');
 
-/**
- * Returns the most common genre across an array of Book records,
- * or null if no genre data is available.
- */
 function favouriteGenre(books) {
   const counts = {};
   for (const book of books) {
@@ -34,49 +33,76 @@ function favouriteGenre(books) {
   return entries.sort((a, b) => b[1] - a[1])[0][0];
 }
 
-async function buildStatsEmbed(userId, displayName) {
-  const logs = await db.readingLog.findMany({
-    where: { userId },
-    include: { book: true },
-    orderBy: { startedAt: 'asc' },
-  });
-
-  if (logs.length === 0) {
-    return null; // caller handles the "no data" reply
-  }
-
-  const finished  = logs.filter(l => l.status === 'finished');
-  const reading   = logs.filter(l => l.status === 'reading');
-  const abandoned = logs.filter(l => l.status === 'abandoned');
-
-  const totalPages = finished.reduce((sum, l) => sum + (l.book.pages || 0), 0);
-
+function avgRatingStr(logs) {
   const rated = logs.filter(l => l.rating !== null);
-  const avgRating = rated.length
-    ? (rated.reduce((sum, l) => sum + l.rating, 0) / rated.length).toFixed(2)
-    : null;
+  if (!rated.length) return null;
+  return (rated.reduce((sum, l) => sum + l.rating, 0) / rated.length).toFixed(2);
+}
 
-  const genre = favouriteGenre(finished.map(l => l.book));
+async function buildStatsEmbed(userId, displayName) {
+  const [logs, clubBookRows] = await Promise.all([
+    db.readingLog.findMany({
+      where: { userId },
+      include: { book: true },
+      orderBy: { startedAt: 'asc' },
+    }),
+    db.clubBook.findMany({ select: { bookId: true } }),
+  ]);
+
+  if (!logs.length) return null;
+
+  const clubBookIds = new Set(clubBookRows.map(cb => cb.bookId));
+
+  const allFinished  = logs.filter(l => l.status === 'finished');
+  const allReading   = logs.filter(l => l.status === 'reading');
+  const allAbandoned = logs.filter(l => l.status === 'abandoned');
+
+  const clubLogs     = logs.filter(l => clubBookIds.has(l.bookId));
+  const clubFinished = clubLogs.filter(l => l.status === 'finished');
+  const clubAbandoned = clubLogs.filter(l => l.status === 'abandoned');
+
+  const totalPages = allFinished.reduce((sum, l) => sum + (l.book.pages || 0), 0);
+  const genre      = favouriteGenre(allFinished.map(l => l.book));
+  const allAvgRating  = avgRatingStr(logs);
+  const clubAvgRating = avgRatingStr(clubLogs);
 
   const embed = new EmbedBuilder()
     .setTitle(`📚 ${displayName}'s Reading Stats`);
 
-  const counts = [
-    `✅ Finished: **${finished.length}**`,
-    `📖 Reading: **${reading.length}**`,
-    `✗ Abandoned: **${abandoned.length}**`,
+  // ── All Reads ──────────────────────────────────────────────────────────────
+  const allCounts = [
+    `✅ Finished: **${allFinished.length}**`,
+    `📖 Reading:  **${allReading.length}**`,
+    `✗  Abandoned: **${allAbandoned.length}**`,
   ].join('\n');
 
-  embed.addFields({ name: 'Books', value: counts });
+  embed.addFields({ name: '── All Reads ──', value: allCounts });
 
   if (totalPages > 0) {
     embed.addFields({ name: 'Total Pages Read', value: totalPages.toLocaleString(), inline: true });
   }
-  if (avgRating) {
-    embed.addFields({ name: 'Avg Rating', value: `${avgRating} ⭐`, inline: true });
+  if (allAvgRating) {
+    embed.addFields({ name: 'Avg Rating', value: `${allAvgRating} ⭐`, inline: true });
   }
   if (genre) {
     embed.addFields({ name: 'Favourite Genre', value: genre, inline: true });
+  }
+
+  // ── Book of the Month ──────────────────────────────────────────────────────
+  if (clubLogs.length > 0) {
+    const enrolled = clubLogs.length;
+    const rate = Math.round((clubFinished.length / enrolled) * 100);
+
+    const clubCounts = [
+      `✅ Finished: **${clubFinished.length}** (${clubFinished.length}/${enrolled}, ${rate}%)`,
+      `✗  Abandoned: **${clubAbandoned.length}**`,
+    ].join('\n');
+
+    embed.addFields({ name: '── Book of the Month ──', value: clubCounts });
+
+    if (clubAvgRating) {
+      embed.addFields({ name: 'Avg Rating', value: `${clubAvgRating} ⭐`, inline: true });
+    }
   }
 
   return embed;
