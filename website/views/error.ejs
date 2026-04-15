@@ -1,0 +1,10 @@
+<%- include('partials/head', { title: title || 'Error' }) %>
+<% if (typeof user !== 'undefined') { %><%- include('partials/nav') %><% } %>
+<div class="container">
+  <div class="alert alert-error" style="margin-top:2rem">
+    <strong><%= title || 'Error' %>:</strong> <%= message %>
+  </div>
+  <p><a href="javascript:history.back()">← Go back</a></p>
+</div>
+</body>
+</html>
