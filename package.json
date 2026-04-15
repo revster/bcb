@@ -3,10 +3,14 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "jest"
+    "test":    "jest",
+    "bot":     "node index.js",
+    "website": "node website/server.js"
   },
   "jest": {
-    "testMatch": ["**/tests/**/*.test.js"]
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ]
   },
   "repository": {
     "type": "git",
@@ -23,8 +27,14 @@
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "cheerio": "^1.2.0",
+    "connect-sqlite3": "^0.9.16",
     "discord.js": "^14.26.2",
     "dotenv": "^17.4.1",
+    "ejs": "^5.0.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.2",
+    "express-session": "^1.19.0",
+    "helmet": "^8.1.0",
     "prisma": "^5.22.0"
   },
   "devDependencies": {

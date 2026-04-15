@@ -1,0 +1,32 @@
+<%- include('../partials/head', { title: 'Dashboard' }) %>
+<%- include('../partials/nav') %>
+<div class="container">
+  <h1>Dashboard</h1>
+
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-number"><%= logCount %></div>
+      <div class="stat-label">Reading Logs</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number"><%= bookCount %></div>
+      <div class="stat-label">Books</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number"><%= memberCount %></div>
+      <div class="stat-label">Members</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number"><%= clubBookCount %></div>
+      <div class="stat-label">Club Books</div>
+    </div>
+  </div>
+
+  <div class="quick-actions">
+    <h2>Quick Actions</h2>
+    <a href="/admin/logs/new" class="btn">+ Add Historical Read</a>
+    <a href="/admin/logs" class="btn btn-secondary">View All Logs</a>
+  </div>
+</div>
+</body>
+</html>

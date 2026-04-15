@@ -1,0 +1,92 @@
+<%- include('../partials/head', { title: 'Reading Logs' }) %>
+<%- include('../partials/nav') %>
+<div class="container">
+  <div class="page-header">
+    <h1>Reading Logs</h1>
+    <a href="/admin/logs/new" class="btn">+ Add Log</a>
+  </div>
+
+  <% if (flash) { %>
+    <div class="alert alert-success"><%= flash %></div>
+  <% } %>
+
+  <form class="filter-bar" method="GET" action="/admin/logs">
+    <select name="member">
+      <option value="">All members</option>
+      <% members.forEach(m => { %>
+        <option value="<%= m.userId %>" <%= filterMember === m.userId ? 'selected' : '' %>>
+          <%= m.username %>
+        </option>
+      <% }) %>
+    </select>
+    <select name="status">
+      <option value="">All statuses</option>
+      <option value="finished"  <%= filterStatus === 'finished'  ? 'selected' : '' %>>Finished</option>
+      <option value="reading"   <%= filterStatus === 'reading'   ? 'selected' : '' %>>Reading</option>
+      <option value="abandoned" <%= filterStatus === 'abandoned' ? 'selected' : '' %>>Abandoned</option>
+    </select>
+    <button type="submit" class="btn btn-secondary">Filter</button>
+    <% if (filterMember || filterStatus) { %>
+      <a href="/admin/logs" class="btn-link">Clear</a>
+    <% } %>
+  </form>
+
+  <% if (logs.length === 0) { %>
+    <p class="empty-state">No logs found.</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Member</th>
+            <th>Book</th>
+            <th>Status</th>
+            <th>Rating</th>
+            <th>Started</th>
+            <th>Finished</th>
+            <th>BOTM</th>
+            <th>Thread</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% logs.forEach(log => { %>
+            <% const cb = clubBookMap.get(log.bookId); %>
+            <tr>
+              <td><%= nameMap[log.userId] || log.userId %></td>
+              <td>
+                <div class="book-title"><%= log.book.title %></div>
+                <div class="book-author"><%= log.book.author %></div>
+              </td>
+              <td><span class="badge badge-<%= log.status %>"><%= log.status %></span></td>
+              <td><%= log.rating ? log.rating + ' ⭐' : '—' %></td>
+              <td><%= log.startedAt ? new Date(log.startedAt).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : '—' %></td>
+              <td><%= log.finishedAt ? new Date(log.finishedAt).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : '—' %></td>
+              <td>
+                <% if (cb) { %>
+                  <span class="badge badge-botm">
+                    BOTM<% if (cb.month && cb.year) { %> <%= ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][cb.month-1] %> <%= cb.year %><% } %>
+                  </span>
+                <% } else { %>—<% } %>
+              </td>
+              <td><%= log.threadId ? '✓' : '—' %></td>
+              <td>
+                <div class="actions">
+                  <a href="/admin/logs/<%= log.id %>/edit" class="btn-sm">Edit</a>
+                  <form method="POST" action="/admin/logs/<%= log.id %>/delete"
+                        onsubmit="return confirm('Delete this log? This cannot be undone.')">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="btn-sm btn-danger">Delete</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <p class="table-count"><%= logs.length %> log<%= logs.length === 1 ? '' : 's' %></p>
+  <% } %>
+</div>
+</body>
+</html>

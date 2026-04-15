@@ -1,0 +1,31 @@
+<nav>
+  <div class="nav-brand">📚 BCB Admin</div>
+  <div class="nav-links">
+    <a href="/admin">Dashboard</a>
+    <a href="/admin/logs">Reading Logs</a>
+    <a href="/admin/logs/new" class="btn-sm">+ Add Log</a>
+  </div>
+  <div class="nav-user">
+    <button type="button" id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode"></button>
+    <span><%= user.globalName || user.username %></span>
+    <form method="POST" action="/auth/logout" style="display:contents">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button type="submit" class="btn-logout">Log out</button>
+    </form>
+  </div>
+</nav>
+<script>
+  (function () {
+    const btn = document.getElementById('themeToggle');
+    function updateIcon() {
+      btn.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
+    }
+    updateIcon();
+    btn.addEventListener('click', function () {
+      const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+      updateIcon();
+    });
+  })();
+</script>

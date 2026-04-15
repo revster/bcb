@@ -121,7 +121,7 @@ model ReadingLog {
   userId      String
   bookId      Int
   book        Book      @relation(fields: [bookId], references: [id])
-  threadId    String    @unique       // Discord thread ID — routes /progress, /rate, /finish
+  threadId    String?   @unique       // Discord thread ID — routes /progress, /rate, /finish; null for manually-entered historical logs
   status      String    @default("reading")  // "reading" | "finished" | "abandoned"
   progress    Float     @default(0)   // 0–100 percentage
   rating      Float?                  // 1–5 (decimals allowed), set by /rate
