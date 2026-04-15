@@ -15,11 +15,25 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const db = require('../db');
 const { resolveUsernames } = require('../lib/resolveUsernames');
 
-/** Keep only the most recent log per userId+bookId pair. */
-function deduplicateByLatest(logs) {
-  const map = new Map();
-  for (const log of logs) map.set(`${log.userId}:${log.bookId}`, log);
-  return [...map.values()];
+/**
+ * Groups logs by userId+bookId and applies status priority:
+ * finished > reading > abandoned.
+ * Returns a map of userId → { enrolled, finished }.
+ */
+function userStats(logs) {
+  const groups = new Map();
+  for (const log of logs) {
+    const key = `${log.userId}:${log.bookId}`;
+    if (!groups.has(key)) groups.set(key, { userId: log.userId, statuses: [] });
+    groups.get(key).statuses.push(log.status);
+  }
+  const enrolled = {};
+  const finished = {};
+  for (const { userId, statuses } of groups.values()) {
+    enrolled[userId] = (enrolled[userId] || 0) + 1;
+    if (statuses.includes('finished')) finished[userId] = (finished[userId] || 0) + 1;
+  }
+  return { enrolled, finished };
 }
 
 /** Competition ranking: 1, 1, 3, 4, 4, 6 … */
@@ -69,18 +83,9 @@ module.exports = {
 
     const rawLogs = await db.readingLog.findMany({
       where: { bookId: { in: clubBookIds } },
-      orderBy: { startedAt: 'asc' },
     });
 
-    const logs = deduplicateByLatest(rawLogs);
-
-    // Per-user stats
-    const enrolled = {};
-    const finished = {};
-    for (const log of logs) {
-      enrolled[log.userId] = (enrolled[log.userId] || 0) + 1;
-      if (log.status === 'finished') finished[log.userId] = (finished[log.userId] || 0) + 1;
-    }
+    const { enrolled, finished } = userStats(rawLogs);
 
     const userIds = Object.keys(enrolled).filter(id => (finished[id] || 0) > 0);
     if (!userIds.length) {

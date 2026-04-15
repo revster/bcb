@@ -15,11 +15,28 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const db = require('../db');
 const { resolveUsernames } = require('../lib/resolveUsernames');
 
-/** Keep only the most recent log per userId+bookId pair. */
-function deduplicateByLatest(logs) {
-  const map = new Map();
-  for (const log of logs) map.set(`${log.userId}:${log.bookId}`, log);
-  return [...map.values()];
+/**
+ * Groups logs by userId+bookId and applies status priority:
+ * finished > reading > abandoned.
+ * A book only counts as abandoned if no log for it is finished or reading.
+ * Returns a map of userId → { enrolled, abandoned }.
+ */
+function userStats(logs) {
+  const groups = new Map();
+  for (const log of logs) {
+    const key = `${log.userId}:${log.bookId}`;
+    if (!groups.has(key)) groups.set(key, { userId: log.userId, statuses: [] });
+    groups.get(key).statuses.push(log.status);
+  }
+  const enrolled = {};
+  const abandoned = {};
+  for (const { userId, statuses } of groups.values()) {
+    enrolled[userId] = (enrolled[userId] || 0) + 1;
+    if (!statuses.includes('finished') && !statuses.includes('reading')) {
+      abandoned[userId] = (abandoned[userId] || 0) + 1;
+    }
+  }
+  return { enrolled, abandoned };
 }
 
 /** Competition ranking: 1, 1, 3, 4, 4, 6 … */
@@ -69,18 +86,9 @@ module.exports = {
 
     const rawLogs = await db.readingLog.findMany({
       where: { bookId: { in: clubBookIds } },
-      orderBy: { startedAt: 'asc' },
     });
 
-    const logs = deduplicateByLatest(rawLogs);
-
-    // Per-user stats
-    const enrolled = {};
-    const abandoned = {};
-    for (const log of logs) {
-      enrolled[log.userId] = (enrolled[log.userId] || 0) + 1;
-      if (log.status === 'abandoned') abandoned[log.userId] = (abandoned[log.userId] || 0) + 1;
-    }
+    const { enrolled, abandoned } = userStats(rawLogs);
 
     const userIds = Object.keys(enrolled).filter(id => (abandoned[id] || 0) > 0);
     if (!userIds.length) {
