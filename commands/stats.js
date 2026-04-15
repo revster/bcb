@@ -1,7 +1,8 @@
 /**
- * commands/stats.js — /stats me | /stats user <user>
+ * commands/stats.js — /stats [user]
  *
- * Personal reading summary for yourself or another member:
+ * Personal reading summary. Defaults to the caller; pass a user to look up
+ * someone else.
  *   - Books finished, currently reading, and abandoned
  *   - Total pages read (finished books with known page counts)
  *   - Average rating given (logs where a rating was set)
@@ -85,29 +86,14 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('stats')
     .setDescription('Reading stats for yourself or another member')
-    .addSubcommand(sub =>
-      sub.setName('me').setDescription('Your personal reading stats')
-    )
-    .addSubcommand(sub =>
-      sub.setName('user')
-        .setDescription('Reading stats for another member')
-        .addUserOption(o =>
-          o.setName('user').setDescription('The member to look up').setRequired(true)
-        )
+    .addUserOption(o =>
+      o.setName('user').setDescription('Member to look up (defaults to you)')
     ),
 
   async execute(interaction) {
-    const sub = interaction.options.getSubcommand();
-
-    let userId, displayName;
-    if (sub === 'me') {
-      userId = interaction.user.id;
-      displayName = interaction.user.displayName ?? interaction.user.username;
-    } else {
-      const target = interaction.options.getUser('user');
-      userId = target.id;
-      displayName = target.displayName ?? target.username;
-    }
+    const target = interaction.options.getUser('user') ?? interaction.user;
+    const userId = target.id;
+    const displayName = target.displayName ?? target.username;
 
     await interaction.deferReply();
 
