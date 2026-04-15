@@ -5,7 +5,7 @@
 [![discord.js](https://img.shields.io/badge/discord.js-v14-5865F2)](https://discord.js.org)
 [![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/revster/bcb/blob/main/LICENSE)
 
-A Discord bot for managing a book club server. Members can track their personal reading and participate in monthly club reads, all from inside Discord.
+A Discord bot and admin web panel for managing a book club server. Members can track their personal reading and participate in monthly club reads, all from inside Discord. Admins can manage reading logs through a web interface with Discord OAuth2 login.
 
 ## Features
 
@@ -33,6 +33,14 @@ A suite of commands for reviewing reading history across the club:
 - `/abandoned` — ranks club books by how many members abandoned them.
 
 All report commands handle re-runs of `/club-start` correctly — a member who has a `finished` log for a book is never double-counted as also `reading` it.
+
+### Admin web panel
+A browser-based admin interface at `http://localhost:3000` (or your deployed URL). Login is via Discord OAuth2 — only members with an admin role in the server are granted access. Admins can:
+
+- View all reading logs with filtering by member and status
+- Add historical reads (with Goodreads URL lookup)
+- Edit or delete any log
+- Mark books as Book of the Month with an optional month/year
 
 ## Commands
 
@@ -85,11 +93,19 @@ npm install
 Create a `.env` file in the project root:
 
 ```
+# Bot
 TOKEN=your_bot_token
 CLIENT_ID=your_application_client_id
 GUILD_ID=your_discord_server_id
 DATABASE_URL=file:./dev.db
+
+# Web panel
+SESSION_SECRET=a_long_random_string
+DISCORD_CLIENT_SECRET=your_oauth2_client_secret
+DISCORD_REDIRECT_URI=http://localhost:3000/auth/discord/callback
 ```
+
+For the web panel, enable the OAuth2 redirect URI in your Discord application under **OAuth2 → Redirects**.
 
 ### Database
 
@@ -104,11 +120,14 @@ npx prisma generate
 node deploy-commands.js
 ```
 
-### Run the bot
+### Run
 
 ```bash
-node index.js
+npm run bot        # Start the Discord bot
+npm run website    # Start the admin web panel (http://localhost:3000)
 ```
+
+Both can run independently or together.
 
 ## Discord server setup
 
@@ -124,7 +143,7 @@ Each registered member also needs a **Forum channel** that the bot will create t
 
 ## Deploying to a new server
 
-1. Deploy code, copy `.env` with new `GUILD_ID`
+1. Deploy code, copy `.env` with new `GUILD_ID` and production `DISCORD_REDIRECT_URI`
 2. `npx prisma db push --accept-data-loss` — initialise schema
 3. `node deploy-commands.js` — register commands with the new guild
 4. Admin runs `/register` for each member pointing at the new server's forum channels
@@ -146,3 +165,5 @@ node clear-global-commands.js          # Wipe globally-registered commands (fixe
 - [Prisma](https://www.prisma.io/) 5 + SQLite
 - [cheerio](https://cheerio.js.org/) for Goodreads scraping
 - [Jest](https://jestjs.io/) for unit tests
+- [Express](https://expressjs.com/) v5 + EJS for the admin web panel
+- [Helmet](https://helmetjs.github.io/) + CSRF middleware for web security

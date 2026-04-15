@@ -8,6 +8,8 @@ A Discord bot for managing a book club server. Core features:
 
 - **Personal reading tracker** — each member has a personal forum channel; `/read` starts a book thread, `/progress` and `/rate` are run from inside the thread
 - **Club read tracking** — `/club-start` designates the community-voted book, creates threads for all members, maintains a live progress post in `#progress`, and opens a spoiler discussion thread in `#epilogue`
+- **Report commands** — `/stats`, `/leaderboard`, `/finishers`, `/abandoners`, `/abandoned`
+- **Admin web panel** — Express/EJS site at `website/`; Discord OAuth2 login restricted to admin roles; admins can view, create, edit, and delete reading logs
 - **Monthly nominations & ranked voting** — on the `features/voting` branch
 
 ## Branches
@@ -16,7 +18,7 @@ A Discord bot for managing a book club server. Core features:
 - `features/voting` — nominations and ranked voting system (not yet merged)
 - `features/reading-tracker` — personal reading tracker + club read tracking (merged into main)
 - `features/reports` — report commands /stats, /leaderboard, /finishers, /abandoners, /abandoned (merged into main)
-- `features/website` — admin web panel with Discord OAuth2 (in progress, not yet merged)
+- `features/website` — admin web panel with Discord OAuth2 (merged into main)
 
 **The `dev.db` file is not tracked by git.** Its schema reflects whichever migrations have been run locally, regardless of which branch is checked out. If the live database is out of sync with the checked-out branch's `prisma/schema.prisma`, run `npx prisma db push --accept-data-loss` (dev) or `npx prisma migrate dev` (prod-safe) to bring it in line.
 
@@ -27,12 +29,16 @@ Requires a `.env` file with:
 - `CLIENT_ID` — Discord application/client ID
 - `GUILD_ID` — Discord server (guild) ID for registering guild-scoped commands
 - `DATABASE_URL` — SQLite connection string (e.g. `file:./dev.db`)
+- `SESSION_SECRET` — secret for Express session signing (web panel only)
+- `DISCORD_CLIENT_SECRET` — OAuth2 client secret (web panel only)
+- `DISCORD_REDIRECT_URI` — OAuth2 redirect URI, e.g. `http://localhost:3000/auth/discord/callback` (web panel only)
 
 ## Dev Commands
 
 ```bash
 npm install                            # Install dependencies
-node index.js                          # Start the bot
+npm run bot                            # Start the Discord bot (node index.js)
+npm run website                        # Start the admin web panel (http://localhost:3000)
 node deploy-commands.js                # Register slash commands with Discord (re-run after any command schema changes)
 node clear-global-commands.js          # Wipe globally-registered commands (fixes duplicate commands from old deployments)
 npm test                               # Run unit tests (Jest)
@@ -110,6 +116,27 @@ if (!log) {
 
 `/club-start` re-runs create a new `ReadingLog` with `status='reading'` for the same book. All report commands handle this by grouping logs per `userId:bookId` and applying status priority: **finished > reading > abandoned**. A book counts as finished if *any* log for that user+book has `status='finished'`, regardless of log order. This prevents phantom inflation of reading/abandoned counts from re-run threads.
 
+### Admin website (`website/`)
+
+An Express 5 + EJS web panel for admins. Started with `npm run website` (port 3000 by default).
+
+**Entry point:** `website/server.js` — mounts Helmet (CSP, etc.), sessions (SQLite via `connect-sqlite3`), CSRF middleware, rate limiting on auth routes, and the three routers.
+
+**Routers:**
+- `website/routes/auth.js` — Discord OAuth2 flow (`/auth/discord` → callback → session), logout
+- `website/routes/admin.js` — HTML pages: dashboard, log list (with member/status filter), create/edit/delete log
+- `website/routes/api.js` — JSON API: `/api/books/scrape` (Goodreads lookup), `/api/members`, `/api/logs`
+
+**Middleware:**
+- `website/middleware/requireAdmin.js` — redirects to `/auth/login` if no session user; sets `res.locals.user`
+- `website/middleware/csrf.js` — per-session CSRF token; validates `_csrf` field on all mutating requests; skips `/auth/discord/callback`
+
+**Auth flow:** Discord OAuth2 with `identify` scope. After token exchange, `isAdmin()` in `website/lib/discord.js` checks the user's guild roles against `ADMIN_ROLE_NAMES`. Only matching roles get a session.
+
+**CSP note:** Helmet sets `script-src-attr 'none'` by default, which blocks all inline `onclick`/`onchange` attributes. All event handlers in EJS templates must be wired with `addEventListener` in `<script>` blocks — never use inline handlers.
+
+**Views:** EJS templates in `website/views/`. Partials: `head.ejs` (applies saved dark/light theme before render to prevent flash), `nav.ejs` (includes theme toggle script). Dark mode is toggled via `data-theme="dark"` on `<html>` and persisted in `localStorage`.
+
 ### Adding a new slash command
 
 1. Create `commands/<name>.js` exporting `{ data, execute }`.
@@ -127,7 +154,7 @@ npx prisma db push --accept-data-loss  # dev
 npx prisma generate
 ```
 
-### Models used by this branch
+### Models
 
 | Model | Purpose |
 |---|---|
