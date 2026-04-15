@@ -34,7 +34,7 @@
           <input type="url" name="goodreadsUrl" id="goodreadsUrl" required
                  placeholder="https://www.goodreads.com/book/show/..."
                  value="<%= values.goodreadsUrl || '' %>">
-          <button type="button" class="btn btn-secondary" onclick="lookupBook()">Lookup</button>
+          <button type="button" id="lookupBtn" class="btn btn-secondary">Lookup</button>
         </div>
         <div id="book-preview" class="book-lookup-preview" style="display:none"></div>
       </div>
@@ -54,7 +54,7 @@
 
     <div class="field">
       <label>Status <span class="required">*</span></label>
-      <select name="status" id="statusSelect" required onchange="onStatusChange()">
+      <select name="status" id="statusSelect" required>
         <option value="finished"  <%= (values.status || log?.status || 'finished') === 'finished'  ? 'selected' : '' %>>Finished</option>
         <option value="reading"   <%= (values.status || log?.status) === 'reading'   ? 'selected' : '' %>>Reading</option>
         <option value="abandoned" <%= (values.status || log?.status) === 'abandoned' ? 'selected' : '' %>>Abandoned</option>
@@ -83,7 +83,7 @@
 
     <div class="field">
       <label>
-        <input type="checkbox" name="isBotm" id="isBotm" onchange="onBotmChange()"
+        <input type="checkbox" name="isBotm" id="isBotm"
                <%= (values.isBotm === 'on' || clubBook) ? 'checked' : '' %>>
         Book of the Month
       </label>
@@ -150,14 +150,28 @@ async function lookupBook() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Lookup failed');
     preview.className = 'book-lookup-preview success';
-    preview.innerHTML = `<strong>${data.title}</strong> by ${data.author}`
-      + (data.pages ? ` — ${data.pages} pages` : '')
-      + (data.fromDb ? ' <em>(already in database)</em>' : '');
+    const strong = document.createElement('strong');
+    strong.textContent = data.title;
+    preview.textContent = '';
+    preview.appendChild(strong);
+    preview.appendChild(document.createTextNode(` by ${data.author}`));
+    if (data.pages) preview.appendChild(document.createTextNode(` — ${data.pages} pages`));
+    if (data.fromDb) {
+      const em = document.createElement('em');
+      em.textContent = ' (already in database)';
+      preview.appendChild(em);
+    }
   } catch (err) {
     preview.className = 'book-lookup-preview error';
     preview.textContent = 'Error: ' + err.message;
   }
 }
+
+// Wire up event listeners
+document.getElementById('statusSelect').addEventListener('change', onStatusChange);
+document.getElementById('isBotm').addEventListener('change', onBotmChange);
+const lookupBtn = document.getElementById('lookupBtn');
+if (lookupBtn) lookupBtn.addEventListener('click', lookupBook);
 
 // Set initial state
 onStatusChange();

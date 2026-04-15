@@ -137,8 +137,8 @@ tr:hover td { background: #fafaf8; }
 .book-author { font-size: 0.8rem; color: var(--muted); }
 .book-meta   { font-size: 0.8rem; color: var(--muted); }
 
-.actions { display: flex; gap: 0.4rem; white-space: nowrap; }
-.actions form { display: inline; }
+.actions { display: flex; gap: 0.4rem; white-space: nowrap; align-items: center; }
+.actions form { display: contents; }
 
 .table-count { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
 .empty-state { color: var(--muted); font-style: italic; padding: 2rem 0; }
@@ -203,3 +203,37 @@ input[type="checkbox"] { width: auto; margin-right: 0.4rem; }
 }
 .book-cover { width: 50px; border-radius: 3px; flex-shrink: 0; }
 .book-meta-row { font-size: 0.875rem; color: var(--muted); margin-bottom: 1.25rem; }
+
+/* ── Dark mode ─────────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg:      #111113;
+  --surface: #1c1c1f;
+  --border:  #2e2e32;
+  --text:    #e4e4e7;
+  --muted:   #8c8c9a;
+  --accent:  #7c85f5;
+}
+[data-theme="dark"] tr:hover td { background: #25252a; }
+[data-theme="dark"] .alert-error   { background: #2d1515; border-color: #6b2c2c; }
+[data-theme="dark"] .alert-success { background: #122a1c; border-color: #2a6b45; }
+[data-theme="dark"] .badge-finished  { background: #122a1c; }
+[data-theme="dark"] .badge-reading   { background: #1a1e3d; }
+[data-theme="dark"] .badge-abandoned { background: #2d1e0a; }
+[data-theme="dark"] .badge-botm      { background: #2a2210; border-color: #6b5a20; }
+[data-theme="dark"] .book-lookup-preview.loading { background: #1c1c1f; }
+[data-theme="dark"] .book-lookup-preview.success { background: #122a1c; }
+[data-theme="dark"] .book-lookup-preview.error   { background: #2d1515; }
+
+/* ── Theme toggle ──────────────────────────────────────────────────────────── */
+.theme-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.2rem 0.55rem;
+  line-height: 1;
+  color: var(--text);
+  transition: background .15s, border-color .15s;
+}
+.theme-toggle:hover { background: var(--border); }

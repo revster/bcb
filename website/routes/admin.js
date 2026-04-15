@@ -5,6 +5,8 @@ const scrapeBook = require('../../lib/scrapeBook');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+const VALID_STATUSES = new Set(['reading', 'finished', 'abandoned']);
+
 async function getMembers() {
   const [users, members] = await Promise.all([
     db.user.findMany(),
@@ -115,6 +117,7 @@ router.post('/logs', async (req, res) => {
 
   try {
     if (!goodreadsUrl || !userId || !status) throw new Error('Goodreads URL, member, and status are required.');
+    if (!VALID_STATUSES.has(status)) throw new Error('Invalid status.');
 
     let book = await db.book.findUnique({ where: { goodreadsUrl } });
     if (!book) {
@@ -197,6 +200,8 @@ router.post('/logs/:id', async (req, res) => {
   if (!log) return res.status(404).render('error', { title: 'Not Found', message: 'Log not found.' });
 
   try {
+    if (!VALID_STATUSES.has(status)) throw new Error('Invalid status.');
+
     await db.readingLog.update({
       where: { id },
       data: {
@@ -239,8 +244,14 @@ router.post('/logs/:id', async (req, res) => {
 
 router.post('/logs/:id/delete', async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  await db.readingLog.delete({ where: { id } });
-  res.redirect('/admin/logs?deleted=1');
+  if (isNaN(id)) return res.status(400).render('error', { title: 'Bad Request', message: 'Invalid log ID.' });
+  try {
+    await db.readingLog.delete({ where: { id } });
+    res.redirect('/admin/logs?deleted=1');
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).render('error', { title: 'Not Found', message: 'Log not found.' });
+    throw err;
+  }
 });
 
 module.exports = router;

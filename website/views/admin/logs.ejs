@@ -70,13 +70,15 @@
                 <% } else { %>—<% } %>
               </td>
               <td><%= log.threadId ? '✓' : '—' %></td>
-              <td class="actions">
-                <a href="/admin/logs/<%= log.id %>/edit" class="btn-sm">Edit</a>
-                <form method="POST" action="/admin/logs/<%= log.id %>/delete"
-                      onsubmit="return confirm('Delete this log? This cannot be undone.')">
-                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-                  <button type="submit" class="btn-sm btn-danger">Delete</button>
-                </form>
+              <td>
+                <div class="actions">
+                  <a href="/admin/logs/<%= log.id %>/edit" class="btn-sm">Edit</a>
+                  <form method="POST" action="/admin/logs/<%= log.id %>/delete"
+                        onsubmit="return confirm('Delete this log? This cannot be undone.')">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                    <button type="submit" class="btn-sm btn-danger">Delete</button>
+                  </form>
+                </div>
               </td>
             </tr>
           <% }) %>
