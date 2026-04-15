@@ -15,21 +15,10 @@
 
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const db = require('../db');
+const { resolveUsernames } = require('../lib/resolveUsernames');
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** Build userId → username from User table, falling back to MemberChannel. */
-async function resolveUsernames(userIds) {
-  const [users, members] = await Promise.all([
-    db.user.findMany({ where: { userId: { in: userIds } } }),
-    db.memberChannel.findMany({ where: { userId: { in: userIds } } }),
-  ]);
-  const map = {};
-  for (const m of members) map[m.userId] = m.username;
-  for (const u of users)   map[u.userId] = u.username; // User table wins (more recent)
-  return map;
-}
 
 // ─── All-time leaderboard ────────────────────────────────────────────────────
 
