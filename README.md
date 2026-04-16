@@ -41,6 +41,10 @@ A browser-based admin interface at `http://localhost:3000` (or your deployed URL
 - Add historical reads (with Goodreads URL lookup)
 - Edit or delete any log
 - Mark books as Book of the Month with an optional month/year
+- Manage the reminder quip library (add or remove quips)
+
+### Weekly reading reminders
+The bot pings members who haven't logged progress on the current month's Book of the Month in 7+ days, using a randomly selected quip from the admin-managed quip library. Reminders are idempotent — each member is pinged at most once every 7 days. Admins can toggle reminders on or off with `/reminders enable` / `/reminders disable`.
 
 ## Commands
 
@@ -50,6 +54,9 @@ A browser-based admin interface at `http://localhost:3000` (or your deployed URL
 | `/register <user> <channel>` | Map a member to their personal forum channel |
 | `/unregister <user>` | Remove a member from club tracking (threads/logs kept) |
 | `/club-start <url> [month] [year]` | Start a club read — creates threads for all members, opens epilogue thread, initialises `#progress` |
+| `/reminders enable` | Enable weekly reading reminder pings |
+| `/reminders disable` | Disable weekly reading reminder pings |
+| `/reminders status` | Check whether reminders are currently enabled |
 
 ### Member
 | Command | Description |
@@ -112,6 +119,7 @@ For the web panel, enable the OAuth2 redirect URI in your Discord application un
 ```bash
 npx prisma db push --accept-data-loss
 npx prisma generate
+npm run seed-quips   # Populate the default reminder quip library
 ```
 
 ### Register slash commands
