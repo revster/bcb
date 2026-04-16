@@ -4,14 +4,23 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
-    "bot": "node index.js",
-    "website": "node website/server.js",
-    "seed-quips": "node scripts/seed-quips.js"
+    "typecheck": "tsc --noEmit",
+    "bot": "tsx index.ts",
+    "website": "tsx website/server.ts",
+    "seed-quips": "tsx scripts/seed-quips.ts"
   },
   "jest": {
     "testMatch": [
-      "**/tests/**/*.test.js"
-    ]
+      "**/tests/**/*.test.ts"
+    ],
+    "transform": {
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "diagnostics": false
+        }
+      ]
+    }
   },
   "repository": {
     "type": "git",
@@ -40,7 +49,15 @@
     "prisma": "^5.22.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/express-session": "^1.18.2",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.6.0",
+    "@types/node-cron": "^3.0.11",
     "jest": "^30.3.0",
-    "supertest": "^7.2.2"
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.9",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
   }
 }
