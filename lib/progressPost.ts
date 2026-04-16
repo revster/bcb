@@ -31,10 +31,7 @@ export async function updateProgressPost(bookId: number, guild: Guild): Promise<
     where: { bookId },
     include: { book: true },
   });
-  if (!clubBook) {
-    console.log(`[progressPost] bookId ${bookId} is not a club book — skipping`);
-    return;
-  }
+  if (!clubBook) return;
 
   const allLogs = await db.readingLog.findMany({
     where: { bookId },
