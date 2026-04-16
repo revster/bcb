@@ -35,9 +35,9 @@ function makeInteraction(url = VALID_URL, { forumChannel = makeForumChannel() } 
     options: { getString: jest.fn().mockReturnValue(url) },
     user: { id: '999', displayName: 'TestUser', username: 'testuser' },
     guild: { channels: { fetch: jest.fn().mockResolvedValue(forumChannel), cache: { find: jest.fn() } } },
-    reply: jest.fn().mockResolvedValue(),
-    deferReply: jest.fn().mockResolvedValue(),
-    editReply: jest.fn().mockResolvedValue(),
+    reply: jest.fn().mockResolvedValue(undefined),
+    deferReply: jest.fn().mockResolvedValue(undefined),
+    editReply: jest.fn().mockResolvedValue(undefined),
   };
 }
 

@@ -3,14 +3,14 @@ jest.mock('../../lib/scrapeBook');
 jest.mock('../../lib/botLog', () => ({ botLog: jest.fn() }));
 const { execute } = require('../../commands/test');
 
-function makeInteraction(url) {
+function makeInteraction(url: string) {
   return {
     options: { getString: jest.fn().mockReturnValue(url) },
     user: { id: '999', username: 'testuser' },
     guild: { channels: { cache: { find: jest.fn().mockReturnValue(null) } } },
-    reply: jest.fn().mockResolvedValue(),
-    deferReply: jest.fn().mockResolvedValue(),
-    editReply: jest.fn().mockResolvedValue(),
+    reply: jest.fn().mockResolvedValue(undefined),
+    deferReply: jest.fn().mockResolvedValue(undefined),
+    editReply: jest.fn().mockResolvedValue(undefined),
   };
 }
 

@@ -20,11 +20,12 @@ function makeApp() {
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
-  app.use((_req, res, next) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  app.use((_req: any, res: any, next: any) => {
     res.locals.user      = { id: '999', username: 'testadmin' };
     res.locals.csrfToken = 'test-csrf';
     // Return the view name as JSON so tests can assert on it
-    res.render = (view, _locals) => res.json({ _view: view });
+    res.render = (view: any, _locals: any) => res.json({ _view: view });
     next();
   });
   app.use('/', adminRoutes);
@@ -38,7 +39,8 @@ function stubMembers() {
 }
 
 beforeAll(() => jest.spyOn(console, 'error').mockImplementation(() => {}));
-afterAll(() => console.error.mockRestore());
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+afterAll(() => (console.error as any).mockRestore());
 afterEach(() => jest.resetAllMocks());
 
 // ── GET / (dashboard) ─────────────────────────────────────────────────────────

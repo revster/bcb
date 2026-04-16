@@ -1,13 +1,11 @@
-const { SlashCommandBuilder } = require('discord.js');
-const { botLog } = require('../lib/botLog');
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
+import { botLog } from '../lib/botLog';
 
-module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('ping')
-    .setDescription('Check if the bot is alive'),
+export const data = new SlashCommandBuilder()
+  .setName('ping')
+  .setDescription('Check if the bot is alive');
 
-  async execute(interaction) {
-    await interaction.reply('Pong! 🏓');
-    await botLog(interaction.guild, `[ping] ${interaction.user.username} checked bot health`);
-  },
-};
+export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  await interaction.reply('Pong! 🏓');
+  await botLog(interaction.guild!, `[ping] ${interaction.user.username} checked bot health`);
+}

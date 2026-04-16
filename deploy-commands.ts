@@ -1,20 +1,20 @@
-require('dotenv').config();
-const { REST, Routes } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
+import 'dotenv/config';
+import { REST, Routes } from 'discord.js';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const commands = fs
   .readdirSync(path.join(__dirname, 'commands'))
-  .filter(file => file.endsWith('.js'))
-  .map(file => require(`./commands/${file}`).data.toJSON());
+  .filter((file: string) => file.endsWith('.ts') || file.endsWith('.js'))
+  .map((file: string) => require(`./commands/${file.replace(/\.(ts|js)$/, '')}`).data.toJSON());
 
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+const rest = new REST({ version: '10' }).setToken(process.env.TOKEN as string);
 
 (async () => {
   try {
     console.log('Registering slash commands...');
     await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      Routes.applicationGuildCommands(process.env.CLIENT_ID as string, process.env.GUILD_ID as string),
       { body: commands }
     );
     console.log('Slash commands registered!');

@@ -72,12 +72,14 @@ app.use('/auth',  authLimiter, authRoutes);
 app.use('/api',   apiRoutes);
 app.use('/admin', requireAdmin, adminRoutes);
 
-app.get('/', (req, res) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+app.get('/', (req: any, res: any) => {
   res.redirect(req.session?.user ? '/admin' : '/auth/login');
 });
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
-app.use((req, res) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+app.use((req: any, res: any) => {
   res.status(404).render('error', { title: 'Not Found', message: 'Page not found.' });
 });
 

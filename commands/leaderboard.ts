@@ -1,5 +1,5 @@
 /**
- * commands/leaderboard.js — /leaderboard [year]
+ * commands/leaderboard.ts — /leaderboard [year]
  *
  * Without a year: ranked list of members by total Book of the Month completions
  * (all time).
@@ -13,16 +13,16 @@
  * counts as finished if any of their logs has status "finished".
  */
 
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const db = require('../db');
-const { resolveUsernames } = require('../lib/resolveUsernames');
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
+import db = require('../db');
+import { resolveUsernames } from '../lib/resolveUsernames';
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // ─── All-time leaderboard ────────────────────────────────────────────────────
 
-async function buildAllTime() {
+async function buildAllTime(): Promise<EmbedBuilder | null> {
   const clubBooks = await db.clubBook.findMany({ select: { bookId: true } });
   if (!clubBooks.length) return null;
 
@@ -36,10 +36,10 @@ async function buildAllTime() {
 
   // Count finished club books per user (deduplicate re-reads by userId+bookId)
   const finishedPairs = new Set(logs.map(l => `${l.userId}:${l.bookId}`));
-  const counts = {};
+  const counts: Record<string, number> = {};
   for (const pair of finishedPairs) {
     const userId = pair.split(':')[0];
-    counts[userId] = (counts[userId] || 0) + 1;
+    counts[userId] = (counts[userId] ?? 0) + 1;
   }
 
   const userIds = Object.keys(counts);
@@ -49,7 +49,7 @@ async function buildAllTime() {
     .sort((a, b) => b[1] - a[1])
     .map(([userId, count], i) => ({
       rank: i + 1,
-      name: usernameMap[userId] || userId,
+      name: usernameMap[userId] ?? userId,
       count,
     }));
 
@@ -66,7 +66,7 @@ async function buildAllTime() {
 
 // ─── Year grid leaderboard ───────────────────────────────────────────────────
 
-async function buildYearGrid(year) {
+async function buildYearGrid(year: number): Promise<EmbedBuilder | null> {
   // Club books for this year that have a month assigned, sorted by month
   const clubBooks = await db.clubBook.findMany({
     where: { year, month: { not: null } },
@@ -95,7 +95,7 @@ async function buildYearGrid(year) {
 
   // Build rows: one per user, sorted by total finished desc then name asc
   const rows = userIds.map(userId => {
-    const name = usernameMap[userId] || userId;
+    const name = usernameMap[userId] ?? userId;
     const cells = clubBooks.map(cb =>
       finishedSet.has(`${userId}:${cb.bookId}`) ? '✓' : '-'
     );
@@ -112,14 +112,14 @@ async function buildYearGrid(year) {
   const COL_W = 5; // width per month column
   const maxNameLen = Math.max(...rows.map(r => r.name.length), 4);
 
-  const pad = (str, width) => str.padEnd(width);
-  const center = (str, width) => {
+  const pad = (str: string, width: number): string => str.padEnd(width);
+  const center = (str: string, width: number): string => {
     const total = width - str.length;
     const left = Math.floor(total / 2);
     return ' '.repeat(left) + str + ' '.repeat(total - left);
   };
 
-  const months = clubBooks.map(cb => MONTH_ABBR[cb.month - 1]);
+  const months = clubBooks.map(cb => MONTH_ABBR[(cb.month ?? 1) - 1]);
 
   // Header row
   const header = pad('', maxNameLen + 2)
@@ -149,33 +149,31 @@ async function buildYearGrid(year) {
 
 // ─── Command ─────────────────────────────────────────────────────────────────
 
-module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('leaderboard')
-    .setDescription('Book of the Month completion leaderboard')
-    .addIntegerOption(o =>
-      o.setName('year')
-        .setDescription('Show grid for a specific year (e.g. 2026)')
-        .setMinValue(2020)
-    ),
+export const data = new SlashCommandBuilder()
+  .setName('leaderboard')
+  .setDescription('Book of the Month completion leaderboard')
+  .addIntegerOption(o =>
+    o.setName('year')
+      .setDescription('Show grid for a specific year (e.g. 2026)')
+      .setMinValue(2020)
+  );
 
-  async execute(interaction) {
-    const year = interaction.options.getInteger('year');
+export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  const year = interaction.options.getInteger('year');
 
-    await interaction.deferReply();
+  await interaction.deferReply();
 
-    const embed = year
-      ? await buildYearGrid(year)
-      : await buildAllTime();
+  const embed = year
+    ? await buildYearGrid(year)
+    : await buildAllTime();
 
-    if (!embed) {
-      const msg = year
-        ? `No Book of the Month data found for ${year}.`
-        : 'No Book of the Month completions recorded yet.';
-      await interaction.editReply({ content: msg });
-      return;
-    }
+  if (!embed) {
+    const msg = year
+      ? `No Book of the Month data found for ${year}.`
+      : 'No Book of the Month completions recorded yet.';
+    await interaction.editReply({ content: msg });
+    return;
+  }
 
-    await interaction.editReply({ embeds: [embed] });
-  },
-};
+  await interaction.editReply({ embeds: [embed] });
+}

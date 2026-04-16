@@ -13,19 +13,21 @@ const { execute } = require('../../commands/finishers');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function makeInteraction({ year = null } = {}) {
+function makeInteraction({ year = null as number | null } = {}) {
   return {
     options: { getInteger: jest.fn().mockReturnValue(year) },
-    deferReply: jest.fn().mockResolvedValue(),
-    editReply: jest.fn().mockResolvedValue(),
+    deferReply: jest.fn().mockResolvedValue(undefined),
+    editReply: jest.fn().mockResolvedValue(undefined),
   };
 }
 
-function getEmbed(interaction) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getEmbed(interaction: any) {
   return interaction.editReply.mock.calls[0][0].embeds[0];
 }
 
-function getReplyContent(interaction) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getReplyContent(interaction: any) {
   return interaction.editReply.mock.calls[0][0].content;
 }
 

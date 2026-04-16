@@ -1,11 +1,15 @@
-require('dotenv').config();
-const { Client, GatewayIntentBits, Collection, MessageFlags } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
-const cron = require('node-cron');
+import 'dotenv/config';
+import { Client, GatewayIntentBits, Collection, MessageFlags, ChatInputCommandInteraction } from 'discord.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import cron = require('node-cron');
+import db = require('./db');
+import { sendReminders } from './lib/reminders';
 
-const db = require('./db');
-const { sendReminders } = require('./lib/reminders');
+interface Command {
+  data: { name: string; toJSON(): unknown };
+  execute(interaction: ChatInputCommandInteraction): Promise<void>;
+}
 
 const client = new Client({
   intents: [
@@ -18,28 +22,28 @@ const client = new Client({
   ]
 });
 
-client.commands = new Collection();
+const commands = new Collection<string, Command>();
 
 fs.readdirSync(path.join(__dirname, 'commands'))
-  .filter(file => file.endsWith('.js'))
-  .forEach(file => {
-    const command = require(`./commands/${file}`);
-    client.commands.set(command.data.name, command);
+  .filter((file: string) => file.endsWith('.ts') || file.endsWith('.js'))
+  .forEach((file: string) => {
+    const command: Command = require(`./commands/${file.replace(/\.(ts|js)$/, '')}`);
+    commands.set(command.data.name, command);
   });
 
 client.once('clientReady', () => {
-  console.log(`Logged in as ${client.user.tag}`);
+  console.log(`Logged in as ${(client.user as { tag: string }).tag}`);
 
   // Daily at 9:00 AM UTC — ping readers who haven't logged progress in 7 days
   cron.schedule('0 9 * * *', () => {
-    sendReminders(client).catch(err => console.error('[reminders] Cron error:', err));
+    sendReminders(client).catch((err: unknown) => console.error('[reminders] Cron error:', err));
   });
 });
 
-client.on('interactionCreate', async interaction => {
+client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
-  const command = client.commands.get(interaction.commandName);
+  const command = commands.get(interaction.commandName);
   if (!command) return;
 
   // Fire-and-forget: keep a userId → username record, updated on every interaction
@@ -53,11 +57,10 @@ client.on('interactionCreate', async interaction => {
     await command.execute(interaction);
   } catch (err) {
     console.error(err);
-    const reply = { content: 'Something went wrong.', flags: MessageFlags.Ephemeral };
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply(reply);
+      await interaction.editReply({ content: 'Something went wrong.' });
     } else {
-      await interaction.reply(reply);
+      await interaction.reply({ content: 'Something went wrong.', flags: MessageFlags.Ephemeral });
     }
   }
 });

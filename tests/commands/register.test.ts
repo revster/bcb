@@ -12,7 +12,7 @@ function makeInteraction({ userId = '111', displayName = 'Alice', channelId = 'c
       getUser: jest.fn().mockReturnValue({ id: userId, displayName, username: displayName.toLowerCase() }),
       getChannel: jest.fn().mockReturnValue({ id: channelId, type: channelType }),
     },
-    reply: jest.fn().mockResolvedValue(),
+    reply: jest.fn().mockResolvedValue(undefined),
   };
 }
 

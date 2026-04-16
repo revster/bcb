@@ -16,13 +16,13 @@ const LOG = { userId: '999', bookId: 1, status: 'reading', progress: 0, startedA
 // Channel that passes the bot-managed thread guard
 function makeBotChannel() {
   return {
-    send: jest.fn().mockResolvedValue(),
+    send: jest.fn().mockResolvedValue(undefined),
     parent: { availableTags: [{ id: 'tag-bot', name: 'Bot' }] },
     appliedTags: ['tag-bot'],
   };
 }
 
-function makeInteraction({ page = null, percentage = null, channelId = 'thread-123' } = {}) {
+function makeInteraction({ page = null as number | null, percentage = null as number | null, channelId = 'thread-123' } = {}) {
   return {
     channelId,
     channel: makeBotChannel(),
@@ -33,7 +33,7 @@ function makeInteraction({ page = null, percentage = null, channelId = 'thread-1
       getInteger: jest.fn().mockReturnValue(page),
       getNumber: jest.fn().mockReturnValue(percentage),
     },
-    reply: jest.fn().mockResolvedValue(),
+    reply: jest.fn().mockResolvedValue(undefined),
   };
 }
 

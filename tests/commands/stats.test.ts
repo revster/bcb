@@ -13,25 +13,29 @@ const BOOK_B = { pages: 300, genres: '["Science Fiction"]' };
 const BOOK_C = { pages: 150, genres: '["Fiction"]' };
 const BOOK_NO_PAGES = { pages: null, genres: '[]' };
 
-function makeLog(bookId, status, { rating = null, book = BOOK_A } = {}) {
+function makeLog(bookId: number, status: string, { rating = null as number | null, book = BOOK_A as { pages: number | null; genres: string } } = {}) {
   return { bookId, status, rating, book };
 }
 
-function makeInteraction({ targetUser = null } = {}) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeInteraction({ targetUser = null as any } = {}) {
   return {
     user: { id: '111', username: 'alice', displayName: 'alice' },
     options: { getUser: jest.fn().mockReturnValue(targetUser) },
-    deferReply: jest.fn().mockResolvedValue(),
-    editReply: jest.fn().mockResolvedValue(),
+    deferReply: jest.fn().mockResolvedValue(undefined),
+    editReply: jest.fn().mockResolvedValue(undefined),
   };
 }
 
-function getEmbed(interaction) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getEmbed(interaction: any) {
   return interaction.editReply.mock.calls[0][0].embeds[0];
 }
 
-function getField(embed, name) {
-  return embed.data.fields.find(f => f.name === name);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getField(embed: any, name: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return embed.data.fields.find((f: any) => f.name === name);
 }
 
 afterEach(() => jest.resetAllMocks());
@@ -334,7 +338,8 @@ describe('/stats execute', () => {
       await execute(interaction);
 
       const fields = getEmbed(interaction).data.fields;
-      const ratingFields = fields.filter(f => f.name === 'Avg Rating');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ratingFields = fields.filter((f: any) => f.name === 'Avg Rating');
       // One for all reads, one for club reads
       expect(ratingFields.length).toBe(2);
     });

@@ -6,10 +6,10 @@ const db = require('../../db');
 const { MessageFlags } = require('discord.js');
 const { execute } = require('../../commands/reminders');
 
-function makeInteraction(subcommand) {
+function makeInteraction(subcommand: string) {
   return {
     options: { getSubcommand: jest.fn().mockReturnValue(subcommand) },
-    reply: jest.fn().mockResolvedValue(),
+    reply: jest.fn().mockResolvedValue(undefined),
   };
 }
 

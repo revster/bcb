@@ -1,11 +1,14 @@
 const requireAdmin = require('../../../website/middleware/requireAdmin');
 
-function makeReq(user = null) {
-  return { session: user ? { user } : {} };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeReq(user: any = null) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { session: user ? { user } : {} as any };
 }
 
 function makeRes() {
-  return { locals: {}, redirect: jest.fn() };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { locals: {} as any, redirect: jest.fn() };
 }
 
 afterEach(() => jest.resetAllMocks());

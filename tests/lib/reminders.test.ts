@@ -12,7 +12,7 @@ const CLUB_BOOK  = { bookId: 1 };
 const STALE_LOG  = { id: 10, userId: 'user-1', bookId: 1, threadId: 'thread-1' };
 const QUIP       = { id: 1, text: 'Read your book!' };
 
-function makeClient(threadSend = jest.fn().mockResolvedValue()) {
+function makeClient(threadSend = jest.fn().mockResolvedValue(undefined)) {
   return {
     channels: {
       fetch: jest.fn().mockResolvedValue({ send: threadSend }),
@@ -23,7 +23,8 @@ function makeClient(threadSend = jest.fn().mockResolvedValue()) {
 // Pin clubBook.findMany to return the current month/year so queries match
 function stubCurrentMonthBotm() {
   const now = new Date();
-  db.clubBook.findMany.mockImplementation(({ where }) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db.clubBook.findMany.mockImplementation(({ where }: any) => {
     if (where.month === now.getMonth() + 1 && where.year === now.getFullYear()) {
       return Promise.resolve([CLUB_BOOK]);
     }
@@ -105,7 +106,7 @@ describe('happy path', () => {
     db.readingLog.findMany.mockResolvedValue([STALE_LOG]);
     db.reminderQuip.findMany.mockResolvedValue([QUIP]);
     db.readingLog.update.mockResolvedValue({});
-    const threadSend = jest.fn().mockResolvedValue();
+    const threadSend = jest.fn().mockResolvedValue(undefined);
     const client = makeClient(threadSend);
 
     await sendReminders(client);
@@ -143,7 +144,7 @@ describe('happy path', () => {
     ]);
     db.reminderQuip.findMany.mockResolvedValue([QUIP]);
     db.readingLog.update.mockResolvedValue({});
-    const threadSend = jest.fn().mockResolvedValue();
+    const threadSend = jest.fn().mockResolvedValue(undefined);
     const client = { channels: { fetch: jest.fn().mockResolvedValue({ send: threadSend }) } };
 
     await sendReminders(client);
@@ -178,7 +179,7 @@ describe('resilience', () => {
     ]);
     db.reminderQuip.findMany.mockResolvedValue([QUIP]);
     db.readingLog.update.mockResolvedValue({});
-    const threadSend = jest.fn().mockResolvedValue();
+    const threadSend = jest.fn().mockResolvedValue(undefined);
     const client = {
       channels: {
         fetch: jest.fn()

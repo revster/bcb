@@ -10,24 +10,26 @@ const { execute } = require('../../commands/abandoned');
 
 function makeInteraction() {
   return {
-    deferReply: jest.fn().mockResolvedValue(),
-    editReply: jest.fn().mockResolvedValue(),
+    deferReply: jest.fn().mockResolvedValue(undefined),
+    editReply: jest.fn().mockResolvedValue(undefined),
   };
 }
 
-function makeClubBook(bookId, { title = 'Book', author = 'Author', month = null, year = null } = {}) {
+function makeClubBook(bookId: number, { title = 'Book', author = 'Author', month = null as number | null, year = null as number | null } = {}) {
   return { bookId, month, year, book: { title, author } };
 }
 
-function makeLog(userId, bookId, status) {
+function makeLog(userId: string, bookId: number, status: string) {
   return { userId, bookId, status };
 }
 
-function getEmbed(interaction) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getEmbed(interaction: any) {
   return interaction.editReply.mock.calls[0][0].embeds[0];
 }
 
-function getReplyContent(interaction) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getReplyContent(interaction: any) {
   return interaction.editReply.mock.calls[0][0].content;
 }
 

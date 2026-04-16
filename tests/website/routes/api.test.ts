@@ -7,7 +7,8 @@ jest.mock('../../../db', () => ({
 }));
 jest.mock('../../../lib/scrapeBook');
 // Bypass auth for route tests
-jest.mock('../../../website/middleware/requireAdmin', () => (_req, _res, next) => next());
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+jest.mock('../../../website/middleware/requireAdmin', () => (_req: any, _res: any, next: any) => next());
 
 const express = require('express');
 const request = require('supertest');
@@ -44,7 +45,7 @@ describe('GET /api/books/scrape', () => {
 
   test('scrapes and returns book when not in db', async () => {
     db.book.findUnique.mockResolvedValue(null);
-    jest.mocked(scrapeBook).mockResolvedValue({ title: 'New Book', author: 'Author', pages: 300, genres: [] });
+    jest.mocked(scrapeBook).mockResolvedValue({ title: 'New Book', author: 'Author', pages: 300, genres: [] as string[], rating: null, image: null });
     const res = await request(makeApp()).get('/api/books/scrape?url=http://gr.com/2');
     expect(res.status).toBe(200);
     expect(res.body.fromDb).toBe(false);

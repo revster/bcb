@@ -1,5 +1,5 @@
 /**
- * commands/read.js — /read <url>
+ * commands/read.ts — /read <url>
  *
  * Starts a reading log for a member. Scrapes the Goodreads book page, creates
  * a thread in the member's personal forum channel, upserts a Book record, and
@@ -11,99 +11,97 @@
  * Re-running /read for the same book starts a new log (useful for re-reads).
  */
 
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const db = require('../db');
-const scrapeBook = require('../lib/scrapeBook');
-const { buildBookEmbed } = require('../lib/buildBookEmbed');
-const { updateProgressPost } = require('../lib/progressPost');
-const { botLog } = require('../lib/botLog');
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, ForumChannel } from 'discord.js';
+import db = require('../db');
+import scrapeBook from '../lib/scrapeBook';
+import { buildBookEmbed } from '../lib/buildBookEmbed';
+import { updateProgressPost } from '../lib/progressPost';
+import { botLog } from '../lib/botLog';
 
 const GOODREADS_BOOK_RE = /^https:\/\/(www\.)?goodreads\.com\/book\/show\//;
 
-module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('read')
-    .setDescription('Start tracking a book — creates a thread in your reading channel')
-    .addStringOption(o =>
-      o.setName('url').setDescription('Goodreads book URL').setRequired(true)
-    ),
+export const data = new SlashCommandBuilder()
+  .setName('read')
+  .setDescription('Start tracking a book — creates a thread in your reading channel')
+  .addStringOption(o =>
+    o.setName('url').setDescription('Goodreads book URL').setRequired(true)
+  );
 
-  async execute(interaction) {
-    const url = interaction.options.getString('url');
+export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  const url = interaction.options.getString('url', true);
 
-    if (!GOODREADS_BOOK_RE.test(url)) {
-      await interaction.reply({
-        content: 'Please provide a valid Goodreads book URL (e.g. `https://www.goodreads.com/book/show/...`).',
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    // Defer ephemerally — scraping + channel ops can take a few seconds
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-    const bookData = await scrapeBook(url).catch(err => {
-      console.error('scrapeBook error:', err);
-      return null;
+  if (!GOODREADS_BOOK_RE.test(url)) {
+    await interaction.reply({
+      content: 'Please provide a valid Goodreads book URL (e.g. `https://www.goodreads.com/book/show/...`).',
+      flags: MessageFlags.Ephemeral,
     });
+    return;
+  }
 
-    if (!bookData) {
-      await interaction.editReply('Could not fetch book info. The Goodreads link may be invalid or the page is unavailable.');
-      return;
-    }
+  // Defer ephemerally — scraping + channel ops can take a few seconds
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const { title, author, rating, pages, image, genres } = bookData;
+  const bookData = await scrapeBook(url).catch(err => {
+    console.error('scrapeBook error:', err);
+    return null;
+  });
 
-    // Look up the member's registered forum channel
-    const memberChannel = await db.memberChannel.findUnique({
-      where: { userId: interaction.user.id },
-    });
+  if (!bookData) {
+    await interaction.editReply('Could not fetch book info. The Goodreads link may be invalid or the page is unavailable.');
+    return;
+  }
 
-    if (!memberChannel) {
-      await interaction.editReply("Your reading channel hasn't been registered yet. Ask an admin to use `/register`.");
-      return;
-    }
+  const { title, author, rating, pages, image, genres } = bookData;
 
-    // Fetch the forum channel from Discord
-    const forumChannel = await interaction.guild.channels.fetch(memberChannel.channelId).catch(() => null);
-    if (!forumChannel) {
-      await interaction.editReply("Your reading channel no longer exists or I can't access it. Ask an admin to update your registration with `/register`.");
-      return;
-    }
+  // Look up the member's registered forum channel
+  const memberChannel = await db.memberChannel.findUnique({
+    where: { userId: interaction.user.id },
+  });
 
-    // Upsert the book record
-    const book = await db.book.upsert({
-      where: { goodreadsUrl: url },
-      update: { title, author, rating, pages, image, genres: JSON.stringify(genres) },
-      create: { title, author, rating, pages, image, genres: JSON.stringify(genres), goodreadsUrl: url },
-    });
+  if (!memberChannel) {
+    await interaction.editReply("Your reading channel hasn't been registered yet. Ask an admin to use `/register`.");
+    return;
+  }
 
-    // Build the opening embed posted as the thread's first message
-    const embed = buildBookEmbed(
-      { title, author, rating, pages, image, genres, goodreadsUrl: url },
-      `Started reading on ${new Date().toDateString()}`
-    );
+  // Fetch the forum channel from Discord
+  const forumChannel = await interaction.guild!.channels.fetch(memberChannel.channelId).catch(() => null) as ForumChannel | null;
+  if (!forumChannel) {
+    await interaction.editReply("Your reading channel no longer exists or I can't access it. Ask an admin to update your registration with `/register`.");
+    return;
+  }
 
-    // Create the thread in the member's forum channel, applying the Bot tag if it exists
-    const botTagId = forumChannel.availableTags?.find(t => t.name === 'Bot')?.id;
-    const thread = await forumChannel.threads.create({
-      name: `${title} by ${author}`,
-      message: { embeds: [embed] },
-      ...(botTagId ? { appliedTags: [botTagId] } : {}),
-    });
+  // Upsert the book record
+  const book = await db.book.upsert({
+    where: { goodreadsUrl: url },
+    update: { title, author, rating, pages, image, genres: JSON.stringify(genres) },
+    create: { title, author, rating, pages, image, genres: JSON.stringify(genres), goodreadsUrl: url },
+  });
 
-    // Open the reading log
-    await db.readingLog.create({
-      data: {
-        userId: interaction.user.id,
-        bookId: book.id,
-        threadId: thread.id,
-      },
-    });
+  // Build the opening embed posted as the thread's first message
+  const embed = buildBookEmbed(
+    { title, author, rating, pages, image, genres, goodreadsUrl: url },
+    `Started reading on ${new Date().toDateString()}`
+  );
 
-    await interaction.editReply(`Your thread for **${title}** is live! [Jump to thread](${thread.url})`);
-    await botLog(interaction.guild, `[read] ${interaction.user.username} started **${title}** by ${author}`);
+  // Create the thread in the member's forum channel, applying the Bot tag if it exists
+  const botTagId = forumChannel.availableTags?.find(t => t.name === 'Bot')?.id;
+  const thread = await forumChannel.threads.create({
+    name: `${title} by ${author}`,
+    message: { embeds: [embed] },
+    ...(botTagId ? { appliedTags: [botTagId] } : {}),
+  });
 
-    await updateProgressPost(book.id, interaction.guild);
-  },
-};
+  // Open the reading log
+  await db.readingLog.create({
+    data: {
+      userId: interaction.user.id,
+      bookId: book.id,
+      threadId: thread.id,
+    },
+  });
+
+  await interaction.editReply(`Your thread for **${title}** is live! [Jump to thread](${thread.url})`);
+  await botLog(interaction.guild!, `[read] ${interaction.user.username} started **${title}** by ${author}`);
+
+  await updateProgressPost(book.id, interaction.guild!);
+}

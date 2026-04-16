@@ -1,11 +1,13 @@
 const csrf = require('../../../website/middleware/csrf');
 
-function makeReq({ method = 'GET', path = '/test', session = {}, body = {}, headers = {} } = {}) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeReq({ method = 'GET', path = '/test', session = {} as any, body = {}, headers = {} } = {}) {
   return { method, path, session, body, headers };
 }
 
-function makeRes() {
-  const res = { locals: {} };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeRes(): any {
+  const res: any = { locals: {} };
   res.status = jest.fn().mockReturnValue(res);
   res.render = jest.fn();
   return res;

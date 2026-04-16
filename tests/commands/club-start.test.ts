@@ -27,7 +27,7 @@ const MEMBER_A = { userId: '111', username: 'alice', channelId: 'ch-alice' };
 const MEMBER_B = { userId: '222', username: 'bob', channelId: 'ch-bob' };
 const THREAD = { id: 'thread-new', url: 'https://discord.com/thread-new' };
 
-function makeForumChannel(tagNames = []) {
+function makeForumChannel(tagNames: string[] = []) {
   return {
     availableTags: tagNames.map((name, i) => ({ id: `tag-${i}`, name })),
     threads: { create: jest.fn().mockResolvedValue(THREAD) },
@@ -46,9 +46,9 @@ function makeInteraction(url = VALID_URL, forumChannel = makeForumChannel()) {
         cache: { find: jest.fn().mockReturnValue(null) },
       },
     },
-    reply: jest.fn().mockResolvedValue(),
-    deferReply: jest.fn().mockResolvedValue(),
-    editReply: jest.fn().mockResolvedValue(),
+    reply: jest.fn().mockResolvedValue(undefined),
+    deferReply: jest.fn().mockResolvedValue(undefined),
+    editReply: jest.fn().mockResolvedValue(undefined),
   };
 }
 

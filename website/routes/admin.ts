@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../db');
-const scrapeBook = require('../../lib/scrapeBook');
+import scrapeBook from '../../lib/scrapeBook';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -12,27 +12,27 @@ async function getMembers() {
     db.user.findMany(),
     db.memberChannel.findMany(),
   ]);
-  const map = new Map();
+  const map = new Map<string, { userId: string; username: string }>();
   for (const m of members) map.set(m.userId, { userId: m.userId, username: m.username });
   for (const u of users)   map.set(u.userId, { userId: u.userId, username: u.username });
   return [...map.values()].sort((a, b) => a.username.localeCompare(b.username));
 }
 
-function toDate(str) {
+function toDate(str: string | undefined): Date | null {
   return str ? new Date(str) : null;
 }
 
-function parseOptionalFloat(str) {
-  const n = parseFloat(str);
+function parseOptionalFloat(str: string | undefined): number | null {
+  const n = parseFloat(str ?? '');
   return isNaN(n) ? null : n;
 }
 
-function parseOptionalInt(str) {
-  const n = parseInt(str, 10);
+function parseOptionalInt(str: string | undefined): number | null {
+  const n = parseInt(str ?? '', 10);
   return isNaN(n) ? null : n;
 }
 
-async function upsertClubBook(bookId, month, year) {
+async function upsertClubBook(bookId: number, month: number | null, year: number | null) {
   await db.clubBook.upsert({
     where:  { bookId },
     create: { bookId, month, year },
@@ -42,7 +42,8 @@ async function upsertClubBook(bookId, month, year) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
-router.get('/', async (req, res) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+router.get('/', async (req: any, res: any) => {
   const [logCount, bookCount, memberCount, clubBookCount] = await Promise.all([
     db.readingLog.count(),
     db.book.count(),
@@ -54,10 +55,11 @@ router.get('/', async (req, res) => {
 
 // ── Reading Logs ──────────────────────────────────────────────────────────────
 
-router.get('/logs', async (req, res) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+router.get('/logs', async (req: any, res: any) => {
   const { member: filterMember, status: filterStatus } = req.query;
 
-  const where = {};
+  const where: Record<string, unknown> = {};
   if (filterMember) where.userId = filterMember;
   if (filterStatus) where.status = filterStatus;
 
@@ -71,16 +73,16 @@ router.get('/logs', async (req, res) => {
     getMembers(),
   ]);
 
-  const userIds = [...new Set(logs.map(l => l.userId))];
+  const userIds = [...new Set(logs.map((l: { userId: string }) => l.userId))];
   const [users, memberChannels] = await Promise.all([
     db.user.findMany({ where: { userId: { in: userIds } } }),
     db.memberChannel.findMany({ where: { userId: { in: userIds } } }),
   ]);
-  const nameMap = {};
+  const nameMap: Record<string, string> = {};
   for (const m of memberChannels) nameMap[m.userId] = m.username;
   for (const u of users)          nameMap[u.userId] = u.username;
 
-  const clubBookMap = new Map(clubBooks.map(cb => [cb.bookId, cb]));
+  const clubBookMap = new Map(clubBooks.map((cb: { bookId: number }) => [cb.bookId, cb]));
 
   const flash = req.query.created  ? 'Log created.'
               : req.query.updated  ? 'Log updated.'
@@ -100,7 +102,8 @@ router.get('/logs', async (req, res) => {
 
 // ── New Log ───────────────────────────────────────────────────────────────────
 
-router.get('/logs/new', async (req, res) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+router.get('/logs/new', async (_req: any, res: any) => {
   res.render('admin/log-form', {
     mode:     'create',
     log:      null,
@@ -112,7 +115,8 @@ router.get('/logs/new', async (req, res) => {
   });
 });
 
-router.post('/logs', async (req, res) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+router.post('/logs', async (req: any, res: any) => {
   const { goodreadsUrl, userId, status, rating, startedAt, finishedAt, isBotm, botmMonth, botmYear } = req.body;
 
   try {
@@ -161,14 +165,15 @@ router.post('/logs', async (req, res) => {
       clubBook: null,
       members:  await getMembers(),
       values:   req.body,
-      error:    err.message,
+      error:    (err as Error).message,
     });
   }
 });
 
 // ── Edit Log ──────────────────────────────────────────────────────────────────
 
-router.get('/logs/:id/edit', async (req, res) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+router.get('/logs/:id/edit', async (req: any, res: any) => {
   const id = parseInt(req.params.id, 10);
   const log = await db.readingLog.findUnique({
     where:   { id },
@@ -189,7 +194,8 @@ router.get('/logs/:id/edit', async (req, res) => {
   });
 });
 
-router.post('/logs/:id', async (req, res) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+router.post('/logs/:id', async (req: any, res: any) => {
   const id = parseInt(req.params.id, 10);
   const { status, rating, startedAt, finishedAt, isBotm, botmMonth, botmYear } = req.body;
 
@@ -235,14 +241,15 @@ router.post('/logs/:id', async (req, res) => {
       clubBook,
       members:  await getMembers(),
       values:   req.body,
-      error:    err.message,
+      error:    (err as Error).message,
     });
   }
 });
 
 // ── Reminder Quips ───────────────────────────────────────────────────────────
 
-router.get('/quips', async (req, res) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+router.get('/quips', async (req: any, res: any) => {
   const quips = await db.reminderQuip.findMany({ orderBy: { createdAt: 'asc' } });
   const flash = req.query.created ? 'Quip added.'
               : req.query.deleted ? 'Quip deleted.'
@@ -250,7 +257,8 @@ router.get('/quips', async (req, res) => {
   res.render('admin/quips', { quips, flash, error: null });
 });
 
-router.post('/quips', async (req, res) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+router.post('/quips', async (req: any, res: any) => {
   const { text } = req.body;
   const quips = await db.reminderQuip.findMany({ orderBy: { createdAt: 'asc' } });
   try {
@@ -258,32 +266,34 @@ router.post('/quips', async (req, res) => {
     await db.reminderQuip.create({ data: { text: text.trim() } });
     res.redirect('/admin/quips?created=1');
   } catch (err) {
-    res.render('admin/quips', { quips, flash: null, error: err.message });
+    res.render('admin/quips', { quips, flash: null, error: (err as Error).message });
   }
 });
 
-router.post('/quips/:id/delete', async (req, res) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+router.post('/quips/:id/delete', async (req: any, res: any) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).render('error', { title: 'Bad Request', message: 'Invalid quip ID.' });
   try {
     await db.reminderQuip.delete({ where: { id } });
     res.redirect('/admin/quips?deleted=1');
   } catch (err) {
-    if (err.code === 'P2025') return res.status(404).render('error', { title: 'Not Found', message: 'Quip not found.' });
+    if ((err as { code?: string }).code === 'P2025') return res.status(404).render('error', { title: 'Not Found', message: 'Quip not found.' });
     throw err;
   }
 });
 
 // ── Delete Log ────────────────────────────────────────────────────────────────
 
-router.post('/logs/:id/delete', async (req, res) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+router.post('/logs/:id/delete', async (req: any, res: any) => {
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).render('error', { title: 'Bad Request', message: 'Invalid log ID.' });
   try {
     await db.readingLog.delete({ where: { id } });
     res.redirect('/admin/logs?deleted=1');
   } catch (err) {
-    if (err.code === 'P2025') return res.status(404).render('error', { title: 'Not Found', message: 'Log not found.' });
+    if ((err as { code?: string }).code === 'P2025') return res.status(404).render('error', { title: 'Not Found', message: 'Log not found.' });
     throw err;
   }
 });

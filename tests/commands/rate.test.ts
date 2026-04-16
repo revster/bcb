@@ -13,7 +13,7 @@ const LOG = { userId: '999', bookId: 1, status: 'reading', book: BOOK };
 
 // Channel that passes the bot-managed thread guard
 const BOT_CHANNEL = {
-  send: jest.fn().mockResolvedValue(),
+  send: jest.fn().mockResolvedValue(undefined),
   parent: { availableTags: [{ id: 'tag-bot', name: 'Bot' }] },
   appliedTags: ['tag-bot'],
 };
@@ -25,7 +25,7 @@ function makeInteraction(rating = 4, channelId = 'thread-123') {
     guild: { channels: { cache: { find: jest.fn().mockReturnValue(null) } } },
     user: { id: '999', username: 'alice' },
     options: { getNumber: jest.fn().mockReturnValue(rating) },
-    reply: jest.fn().mockResolvedValue(),
+    reply: jest.fn().mockResolvedValue(undefined),
   };
 }
 

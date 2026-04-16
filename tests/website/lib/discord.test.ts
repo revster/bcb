@@ -1,14 +1,16 @@
 const { isAdmin } = require('../../../website/lib/discord');
 
 // isAdmin calls getGuildMember (fetch call 0) and getGuildRoles (fetch call 1) in parallel
-function mockFetch(memberResponse, rolesResponse) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mockFetch(memberResponse: any, rolesResponse: any) {
   let call = 0;
   global.fetch = jest.fn().mockImplementation(() => {
     return Promise.resolve(call++ === 0 ? memberResponse : rolesResponse);
   });
 }
 
-function jsonResponse(data, status = 200) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function jsonResponse(data: any, status = 200) {
   return { ok: status < 400, status, json: () => Promise.resolve(data) };
 }
 
