@@ -59,9 +59,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   // Find existing book record or scrape it fresh
   let book = await db.book.findUnique({ where: { goodreadsUrl: url } });
   if (!book) {
-    const scraped = await scrapeBook(url).catch(() => null);
-    if (!scraped) {
-      await interaction.editReply('Could not fetch book info from Goodreads. Check the URL and try again.');
+    let scraped: Awaited<ReturnType<typeof scrapeBook>> | null = null;
+    try {
+      scraped = await scrapeBook(url);
+    } catch (err) {
+      const msg = (err as Error).message ?? String(err);
+      await botLog(interaction.guild!, `[club-start] scrape failed for ${url}: ${msg}`);
+      await interaction.editReply(`Could not fetch book info from Goodreads: ${msg}`);
       return;
     }
     const { title, author, rating, pages, image, genres } = scraped;

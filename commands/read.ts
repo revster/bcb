@@ -41,13 +41,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   // Defer ephemerally — scraping + channel ops can take a few seconds
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const bookData = await scrapeBook(url).catch(err => {
-    console.error('scrapeBook error:', err);
-    return null;
-  });
-
-  if (!bookData) {
-    await interaction.editReply('Could not fetch book info. The Goodreads link may be invalid or the page is unavailable.');
+  let bookData: Awaited<ReturnType<typeof scrapeBook>> | null = null;
+  try {
+    bookData = await scrapeBook(url);
+  } catch (err) {
+    const msg = (err as Error).message ?? String(err);
+    await botLog(interaction.guild!, `[read] scrape failed for ${url}: ${msg}`);
+    await interaction.editReply(`Could not fetch book info: ${msg}`);
     return;
   }
 
