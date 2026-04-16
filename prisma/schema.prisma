@@ -132,6 +132,13 @@ model ReadingLog {
   updatedAt      DateTime  @updatedAt
 }
 
+// Generic key-value bot settings
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
 // A reminder quip posted when a member hasn't logged progress in a week
 model ReminderQuip {
   id        Int      @id @default(autoincrement())
