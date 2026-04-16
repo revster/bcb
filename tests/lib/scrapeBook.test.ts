@@ -1,6 +1,6 @@
-const scrapeBook = require('../../lib/scrapeBook');
+import scrapeBook from '../../lib/scrapeBook';
 
-function makeHtml(bookData, genreLinks = []) {
+function makeHtml(bookData: unknown, genreLinks: string[] = []) {
   const genreAnchors = genreLinks
     .map(g => `<a href="/genres/${g.toLowerCase()}">${g}</a>`)
     .join('\n');
@@ -11,7 +11,7 @@ function makeHtml(bookData, genreLinks = []) {
   `;
 }
 
-function mockFetch(html, status = 200) {
+function mockFetch(html: string, status = 200) {
   global.fetch = jest.fn().mockResolvedValue({
     ok: status >= 200 && status < 300,
     status,

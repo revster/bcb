@@ -1,6 +1,6 @@
+import scrapeBook from '../../lib/scrapeBook';
 jest.mock('../../lib/scrapeBook');
 jest.mock('../../lib/botLog', () => ({ botLog: jest.fn() }));
-const scrapeBook = require('../../lib/scrapeBook');
 const { execute } = require('../../commands/test');
 
 function makeInteraction(url) {
@@ -38,7 +38,7 @@ describe('/read execute', () => {
   });
 
   test('defers reply then edits with an embed on success', async () => {
-    scrapeBook.mockResolvedValue(SCRAPED_BOOK);
+    jest.mocked(scrapeBook).mockResolvedValue(SCRAPED_BOOK);
     const interaction = makeInteraction(VALID_URL);
     await execute(interaction);
 
@@ -50,7 +50,7 @@ describe('/read execute', () => {
 
   test('edits reply with an error message when scraping fails', async () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
-    scrapeBook.mockRejectedValue(new Error('Could not find book metadata on page'));
+    jest.mocked(scrapeBook).mockRejectedValue(new Error('Could not find book metadata on page'));
     const interaction = makeInteraction(VALID_URL);
     await execute(interaction);
 

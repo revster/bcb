@@ -1,3 +1,4 @@
+import scrapeBook from '../../lib/scrapeBook';
 jest.mock('../../db', () => ({
   book: { findUnique: jest.fn(), upsert: jest.fn() },
   clubBook: { upsert: jest.fn(), update: jest.fn() },
@@ -9,8 +10,6 @@ jest.mock('../../lib/progressPost', () => ({ updateProgressPost: jest.fn() }));
 jest.mock('../../lib/botLog', () => ({ botLog: jest.fn() }));
 
 const db = require('../../db');
-const scrapeBook = require('../../lib/scrapeBook');
-const { MessageFlags } = require('discord.js');
 const { execute } = require('../../commands/club-start');
 
 const VALID_URL = 'https://www.goodreads.com/book/show/4671.The_Great_Gatsby';
@@ -156,7 +155,7 @@ describe('/club-start execute', () => {
       db.book.upsert.mockResolvedValue(BOOK);
       db.clubBook.upsert.mockResolvedValue({});
       db.memberChannel.findMany.mockResolvedValue([]);
-      scrapeBook.mockResolvedValue({
+      jest.mocked(scrapeBook).mockResolvedValue({
         title: 'The Great Gatsby',
         author: 'F. Scott Fitzgerald',
         rating: '3.93 / 5',
@@ -175,7 +174,7 @@ describe('/club-start execute', () => {
     });
 
     test('replies with error when scrape fails', async () => {
-      scrapeBook.mockRejectedValue(new Error('404'));
+      jest.mocked(scrapeBook).mockRejectedValue(new Error('404'));
       const interaction = makeInteraction();
       await execute(interaction);
 

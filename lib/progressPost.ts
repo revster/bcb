@@ -1,5 +1,5 @@
 /**
- * lib/progressPost.js
+ * lib/progressPost.ts
  *
  * Maintains the two-message #progress post for a club book:
  *   Message 1 — book embed (title, author, cover, Goodreads link, metadata)
@@ -8,18 +8,11 @@
  * Both message IDs are stored on ClubBook so they can be edited in-place.
  * If either message is missing (deleted), both are recreated so they stay
  * adjacent. Called after any command that changes reading progress or status.
- *
- * Status display:
- *   reading  →  plain bar + percentage
- *   finished →  full bar + ✓
- *   abandoned → bar at abandon point + ✗
- *
- * When a member has multiple logs for the same book (re-reads), only their
- * most recent log is shown.
  */
 
-const db = require('../db');
-const { buildBookEmbed } = require('./buildBookEmbed');
+import type { Guild, TextChannel } from 'discord.js';
+import db = require('../db');
+import { buildBookEmbed } from './buildBookEmbed';
 
 const PROGRESS_CHANNEL_NAME = 'progress';
 const BAR_LENGTH = 20;
@@ -28,19 +21,12 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-function buildBar(pct) {
+function buildBar(pct: number): string {
   const filled = Math.round((Math.min(pct, 100) / 100) * BAR_LENGTH);
   return '█'.repeat(filled) + '░'.repeat(BAR_LENGTH - filled);
 }
 
-/**
- * Rebuilds and edits (or creates) the #progress post for the given bookId.
- * No-ops silently if the book is not a ClubBook or if #progress doesn't exist.
- *
- * @param {number} bookId
- * @param {import('discord.js').Guild} guild
- */
-async function updateProgressPost(bookId, guild) {
+export async function updateProgressPost(bookId: number, guild: Guild): Promise<void> {
   const clubBook = await db.clubBook.findUnique({
     where: { bookId },
     include: { book: true },
@@ -60,7 +46,7 @@ async function updateProgressPost(bookId, guild) {
   }
 
   // If a user has read the same book multiple times, show only their most recent log
-  const seen = new Set();
+  const seen = new Set<string>();
   const logs = allLogs.reverse().filter(l => {
     if (seen.has(l.userId)) return false;
     seen.add(l.userId);
@@ -73,7 +59,7 @@ async function updateProgressPost(bookId, guild) {
   });
   const usernameMap = Object.fromEntries(memberChannels.map(mc => [mc.userId, mc.username]));
 
-  const names = logs.map(log => usernameMap[log.userId] || log.userId);
+  const names = logs.map(log => usernameMap[log.userId] ?? log.userId);
   const maxLen = Math.max(...names.map(n => n.length));
 
   const lines = logs.map((log, i) => {
@@ -91,13 +77,11 @@ async function updateProgressPost(bookId, guild) {
     : '';
 
   const content = `**${book.title}** by ${book.author}${monthYearStr}`;
-
   const embed = buildBookEmbed(book);
-
   const barsContent = '```\n' + lines.join('\n') + '\n```';
 
   const allChannels = await guild.channels.fetch();
-  const progressChannel = allChannels.find(c => c.name === PROGRESS_CHANNEL_NAME);
+  const progressChannel = allChannels.find(c => c?.name === PROGRESS_CHANNEL_NAME) as TextChannel | undefined;
   if (!progressChannel) {
     console.log(`[progressPost] no channel named "${PROGRESS_CHANNEL_NAME}" found in guild — skipping`);
     return;
@@ -123,5 +107,3 @@ async function updateProgressPost(bookId, guild) {
     data: { progressMessageId: embedMsg.id, progressBarsMessageId: barsMsg.id },
   });
 }
-
-module.exports = { updateProgressPost };

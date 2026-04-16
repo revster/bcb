@@ -1,3 +1,4 @@
+import scrapeBook from '../../../lib/scrapeBook';
 jest.mock('../../../db', () => ({
   book:        { findUnique: jest.fn() },
   user:        { findMany: jest.fn() },
@@ -11,7 +12,6 @@ jest.mock('../../../website/middleware/requireAdmin', () => (_req, _res, next) =
 const express = require('express');
 const request = require('supertest');
 const db          = require('../../../db');
-const scrapeBook  = require('../../../lib/scrapeBook');
 const apiRoutes   = require('../../../website/routes/api');
 
 function makeApp() {
@@ -44,7 +44,7 @@ describe('GET /api/books/scrape', () => {
 
   test('scrapes and returns book when not in db', async () => {
     db.book.findUnique.mockResolvedValue(null);
-    scrapeBook.mockResolvedValue({ title: 'New Book', author: 'Author', pages: 300, genres: [] });
+    jest.mocked(scrapeBook).mockResolvedValue({ title: 'New Book', author: 'Author', pages: 300, genres: [] });
     const res = await request(makeApp()).get('/api/books/scrape?url=http://gr.com/2');
     expect(res.status).toBe(200);
     expect(res.body.fromDb).toBe(false);
@@ -53,7 +53,7 @@ describe('GET /api/books/scrape', () => {
 
   test('returns 422 when scraping fails', async () => {
     db.book.findUnique.mockResolvedValue(null);
-    scrapeBook.mockRejectedValue(new Error('Goodreads returned 404'));
+    jest.mocked(scrapeBook).mockRejectedValue(new Error('Goodreads returned 404'));
     const res = await request(makeApp()).get('/api/books/scrape?url=http://gr.com/bad');
     expect(res.status).toBe(422);
     expect(res.body.error).toBe('Goodreads returned 404');

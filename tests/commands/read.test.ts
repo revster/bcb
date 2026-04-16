@@ -3,11 +3,11 @@ jest.mock('../../db', () => ({
   book: { upsert: jest.fn() },
   readingLog: { create: jest.fn() },
 }));
+import scrapeBook from '../../lib/scrapeBook';
 jest.mock('../../lib/scrapeBook');
 jest.mock('../../lib/progressPost', () => ({ updateProgressPost: jest.fn() }));
 
 const db = require('../../db');
-const scrapeBook = require('../../lib/scrapeBook');
 const { MessageFlags } = require('discord.js');
 const { execute } = require('../../commands/read');
 
@@ -69,7 +69,7 @@ describe('/read execute', () => {
   describe('scrape failure', () => {
     test('replies with error when scraping fails', async () => {
       jest.spyOn(console, 'error').mockImplementation(() => {});
-      scrapeBook.mockRejectedValue(new Error('Goodreads returned 404'));
+      jest.mocked(scrapeBook).mockRejectedValue(new Error('Goodreads returned 404'));
       db.memberChannel.findUnique.mockResolvedValue(MEMBER_CHANNEL);
       const interaction = makeInteraction();
       await execute(interaction);
@@ -83,7 +83,7 @@ describe('/read execute', () => {
 
   describe('unregistered member', () => {
     test('replies with register prompt when no MemberChannel exists', async () => {
-      scrapeBook.mockResolvedValue(SCRAPED_BOOK);
+      jest.mocked(scrapeBook).mockResolvedValue(SCRAPED_BOOK);
       db.memberChannel.findUnique.mockResolvedValue(null);
       const interaction = makeInteraction();
       await execute(interaction);
@@ -97,7 +97,7 @@ describe('/read execute', () => {
 
   describe('successful start', () => {
     beforeEach(() => {
-      scrapeBook.mockResolvedValue(SCRAPED_BOOK);
+      jest.mocked(scrapeBook).mockResolvedValue(SCRAPED_BOOK);
       db.memberChannel.findUnique.mockResolvedValue(MEMBER_CHANNEL);
       db.book.upsert.mockResolvedValue(UPSERTED_BOOK);
       db.readingLog.create.mockResolvedValue({});

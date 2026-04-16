@@ -1,6 +1,15 @@
-const cheerio = require('cheerio');
+import * as cheerio from 'cheerio';
 
-async function scrapeBook(url) {
+interface ScrapedBook {
+  title: string;
+  author: string;
+  rating: string | null;
+  pages: number | null;
+  image: string | null;
+  genres: string[];
+}
+
+async function scrapeBook(url: string): Promise<ScrapedBook> {
   const res = await fetch(url, {
     headers: {
       'User-Agent':
@@ -14,10 +23,11 @@ async function scrapeBook(url) {
   const html = await res.text();
   const $ = cheerio.load(html);
 
-  let bookData = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let bookData: any = null;
   $('script[type="application/ld+json"]').each((_, el) => {
     try {
-      const parsed = JSON.parse($(el).html());
+      const parsed = JSON.parse($(el).html() ?? '');
       if (parsed['@type'] === 'Book') bookData = parsed;
     } catch {
       // skip malformed script tags
@@ -27,23 +37,24 @@ async function scrapeBook(url) {
   if (!bookData) throw new Error('Could not find book metadata on page');
 
   // Goodreads JSON-LD contains HTML-encoded strings — decode them through cheerio
-  const decodeEntities = str => str ? $('<textarea>').html(str).text() : str;
+  const decodeEntities = (str: string | null | undefined): string =>
+    str ? $('<textarea>').html(str)?.text() ?? str : '';
 
-  const title = decodeEntities(bookData.name);
-  const author = Array.isArray(bookData.author)
-    ? bookData.author.map(a => decodeEntities(a.name)).join(', ')
-    : decodeEntities(bookData.author?.name);
+  const title = decodeEntities(bookData['name']);
+  const author = Array.isArray(bookData['author'])
+    ? bookData['author'].map((a: { name: string }) => decodeEntities(a.name)).join(', ')
+    : decodeEntities(bookData['author']?.name);
 
   if (!title || !author) throw new Error('Missing title or author in metadata');
 
-  const rating = bookData.aggregateRating?.ratingValue
-    ? `${parseFloat(bookData.aggregateRating.ratingValue).toFixed(2)} / 5`
+  const rating = bookData['aggregateRating']?.ratingValue
+    ? `${parseFloat(bookData['aggregateRating'].ratingValue).toFixed(2)} / 5`
     : null;
-  const pages = bookData.numberOfPages ?? null;
-  const image = bookData.image ?? null;
+  const pages: number | null = bookData['numberOfPages'] ?? null;
+  const image: string | null = bookData['image'] ?? null;
 
   // Genres are not in the JSON-LD — scrape from HTML
-  const genres = [];
+  const genres: string[] = [];
   $('a[href*="/genres/"]').each((_, el) => {
     const name = $(el).text().trim();
     if (name) genres.push(name);
@@ -53,4 +64,4 @@ async function scrapeBook(url) {
   return { title, author, rating, pages, image, genres: uniqueGenres };
 }
 
-module.exports = scrapeBook;
+export = scrapeBook;

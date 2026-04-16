@@ -1,5 +1,5 @@
 /**
- * lib/reminders.js — weekly reading reminder pings
+ * lib/reminders.ts — weekly reading reminder pings
  *
  * Sends a funny quip to members who haven't logged progress on the current
  * Book of the Month in 7+ days. Only fires for the BOTM of the current
@@ -9,14 +9,15 @@
  * to call this more than once a day (e.g. after a restart).
  */
 
-const db = require('../db');
+import type { Client } from 'discord.js';
+import db = require('../db');
 
-async function sendReminders(client) {
+export async function sendReminders(client: Client): Promise<void> {
   const setting = await db.setting.findUnique({ where: { key: 'reminders_enabled' } });
   if (setting?.value === 'false') return;
 
   const now = new Date();
-  const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   // Find all BOTMs for the current month (there may be more than one)
   const clubBooks = await db.clubBook.findMany({
@@ -26,12 +27,10 @@ async function sendReminders(client) {
     },
   });
 
-  if (clubBooks.length === 0) return; // No BOTM this month — nothing to do
+  if (clubBooks.length === 0) return;
 
   const bookIds = clubBooks.map(cb => cb.bookId);
 
-  // Find reading logs for these books where the user hasn't logged progress
-  // in 7 days AND hasn't been reminded in 7 days
   const staleLogs = await db.readingLog.findMany({
     where: {
       bookId: { in: bookIds },
@@ -55,7 +54,6 @@ async function sendReminders(client) {
 
   if (staleLogs.length === 0) return;
 
-  // Pick a random quip from the DB
   const quips = await db.reminderQuip.findMany();
   if (quips.length === 0) return;
 
@@ -63,11 +61,10 @@ async function sendReminders(client) {
     try {
       const quip = quips[Math.floor(Math.random() * quips.length)];
 
-      // Find the thread to ping in
       if (!log.threadId) continue;
 
       const thread = await client.channels.fetch(log.threadId).catch(() => null);
-      if (!thread) continue;
+      if (!thread || !('send' in thread)) continue;
 
       await thread.send(`<@${log.userId}> ${quip.text}`);
 
@@ -76,10 +73,7 @@ async function sendReminders(client) {
         data:  { lastRemindedAt: now },
       });
     } catch (err) {
-      // Don't let one failed ping stop the rest
       console.error(`[reminders] Failed to remind user ${log.userId}:`, err);
     }
   }
 }
-
-module.exports = { sendReminders };
