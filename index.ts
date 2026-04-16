@@ -25,6 +25,16 @@ const client = new Client({
 
 const commands = new Collection<string, Command>();
 
+// Deduplicate interactions — Discord can replay unacknowledged events on reconnect,
+// causing the same interaction to fire twice. IDs are evicted after 60 s.
+const seenInteractions = new Set<string>();
+function isDuplicate(id: string): boolean {
+  if (seenInteractions.has(id)) return true;
+  seenInteractions.add(id);
+  setTimeout(() => seenInteractions.delete(id), 60_000);
+  return false;
+}
+
 fs.readdirSync(path.join(__dirname, 'commands'))
   .filter((file: string) => file.endsWith('.ts') || file.endsWith('.js'))
   .forEach((file: string) => {
@@ -46,6 +56,7 @@ client.once('clientReady', () => {
 
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
+  if (isDuplicate(interaction.id)) return;
 
   const command = commands.get(interaction.commandName);
   if (!command) return;
