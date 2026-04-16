@@ -4,6 +4,7 @@ jest.mock('../../../db', () => ({
   user:          { findMany: jest.fn(), count: jest.fn() },
   memberChannel: { findMany: jest.fn() },
   clubBook:      { count: jest.fn(), findMany: jest.fn(), findUnique: jest.fn(), upsert: jest.fn(), delete: jest.fn() },
+  reminderQuip:  { findMany: jest.fn(), create: jest.fn(), delete: jest.fn() },
 }));
 jest.mock('../../../lib/scrapeBook');
 
@@ -185,6 +186,61 @@ describe('POST /logs/:id', () => {
     db.readingLog.findUnique.mockResolvedValue(null);
     const res = await request(makeApp()).post('/logs/999').send({ status: 'finished' });
     expect(res.status).toBe(404);
+  });
+});
+
+// ── GET /quips ────────────────────────────────────────────────────────────────
+
+describe('GET /quips', () => {
+  test('renders quips view', async () => {
+    db.reminderQuip.findMany.mockResolvedValue([]);
+    const res = await request(makeApp()).get('/quips');
+    expect(res.status).toBe(200);
+    expect(res.body._view).toBe('admin/quips');
+  });
+});
+
+// ── POST /quips ───────────────────────────────────────────────────────────────
+
+describe('POST /quips', () => {
+  test('creates quip and redirects on success', async () => {
+    db.reminderQuip.findMany.mockResolvedValue([]);
+    db.reminderQuip.create.mockResolvedValue({});
+    const res = await request(makeApp()).post('/quips').send({ text: 'Read your book!' });
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/admin/quips?created=1');
+  });
+
+  test('re-renders form when text is empty', async () => {
+    db.reminderQuip.findMany.mockResolvedValue([]);
+    const res = await request(makeApp()).post('/quips').send({ text: '' });
+    expect(res.status).toBe(200);
+    expect(res.body._view).toBe('admin/quips');
+  });
+});
+
+// ── POST /quips/:id/delete ────────────────────────────────────────────────────
+
+describe('POST /quips/:id/delete', () => {
+  test('deletes quip and redirects on success', async () => {
+    db.reminderQuip.delete.mockResolvedValue({});
+    const res = await request(makeApp()).post('/quips/1/delete');
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/admin/quips?deleted=1');
+  });
+
+  test('returns 400 for a non-numeric id', async () => {
+    const res = await request(makeApp()).post('/quips/abc/delete');
+    expect(res.status).toBe(400);
+    expect(res.body._view).toBe('error');
+  });
+
+  test('returns 404 when quip does not exist (Prisma P2025)', async () => {
+    const err = Object.assign(new Error('Record not found'), { code: 'P2025' });
+    db.reminderQuip.delete.mockRejectedValue(err);
+    const res = await request(makeApp()).post('/quips/999/delete');
+    expect(res.status).toBe(404);
+    expect(res.body._view).toBe('error');
   });
 });
 

@@ -1,0 +1,49 @@
+/**
+ * commands/reminders.js — /reminders
+ *
+ * Admin command to enable, disable, or check the status of weekly reading
+ * reminders. Requires Manage Guild permission.
+ */
+
+const { SlashCommandBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
+const db = require('../db');
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('reminders')
+    .setDescription('Manage weekly reading reminders (admin only)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addSubcommand(sub =>
+      sub.setName('enable').setDescription('Enable weekly reading reminders')
+    )
+    .addSubcommand(sub =>
+      sub.setName('disable').setDescription('Disable weekly reading reminders')
+    )
+    .addSubcommand(sub =>
+      sub.setName('status').setDescription('Check whether reminders are currently enabled')
+    ),
+
+  async execute(interaction) {
+    const sub = interaction.options.getSubcommand();
+
+    if (sub === 'enable' || sub === 'disable') {
+      const value = sub === 'enable' ? 'true' : 'false';
+      await db.setting.upsert({
+        where:  { key: 'reminders_enabled' },
+        update: { value },
+        create: { key: 'reminders_enabled', value },
+      });
+      const msg = sub === 'enable'
+        ? 'Weekly reading reminders are now **enabled**.'
+        : 'Weekly reading reminders are now **disabled**.';
+      await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
+    } else {
+      const setting = await db.setting.findUnique({ where: { key: 'reminders_enabled' } });
+      const enabled = setting?.value !== 'false';
+      await interaction.reply({
+        content: `Weekly reading reminders are currently **${enabled ? 'enabled' : 'disabled'}**.`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+  },
+};

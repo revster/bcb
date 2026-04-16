@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Rules
 
 - **Never add `Co-Authored-By` trailers to git commits.** The sole contributor on this repo is the human owner. Do not include any Claude co-author lines in commit messages.
+- **Only push `main` to the remote.** Feature branches stay local only. Never run `git push` on a feature branch.
 
 ## Purpose
 
@@ -18,11 +19,12 @@ A Discord bot for managing a book club server. Core features:
 
 ## Branches
 
-- `main` — stable; contains all merged features to date
+- `main` — stable; contains all merged features to date. **This is the only branch pushed to remote.**
 - `features/voting` — nominations and ranked voting system (not yet merged)
 - `features/reading-tracker` — personal reading tracker + club read tracking (merged into main)
 - `features/reports` — report commands /stats, /leaderboard, /finishers, /abandoners, /abandoned (merged into main)
 - `features/website` — admin web panel with Discord OAuth2 (merged into main)
+- `features/reminder` — weekly reading reminders with quip management (merged into main)
 
 **The `dev.db` file is not tracked by git.** Its schema reflects whichever migrations have been run locally, regardless of which branch is checked out. If the live database is out of sync with the checked-out branch's `prisma/schema.prisma`, run `npx prisma db push --accept-data-loss` (dev) or `npx prisma migrate dev` (prod-safe) to bring it in line.
 

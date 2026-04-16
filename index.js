@@ -2,8 +2,10 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Collection, MessageFlags } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const cron = require('node-cron');
 
 const db = require('./db');
+const { sendReminders } = require('./lib/reminders');
 
 const client = new Client({
   intents: [
@@ -27,6 +29,11 @@ fs.readdirSync(path.join(__dirname, 'commands'))
 
 client.once('clientReady', () => {
   console.log(`Logged in as ${client.user.tag}`);
+
+  // Daily at 9:00 AM UTC — ping readers who haven't logged progress in 7 days
+  cron.schedule('0 9 * * *', () => {
+    sendReminders(client).catch(err => console.error('[reminders] Cron error:', err));
+  });
 });
 
 client.on('interactionCreate', async interaction => {

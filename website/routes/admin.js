@@ -240,6 +240,40 @@ router.post('/logs/:id', async (req, res) => {
   }
 });
 
+// ── Reminder Quips ───────────────────────────────────────────────────────────
+
+router.get('/quips', async (req, res) => {
+  const quips = await db.reminderQuip.findMany({ orderBy: { createdAt: 'asc' } });
+  const flash = req.query.created ? 'Quip added.'
+              : req.query.deleted ? 'Quip deleted.'
+              : null;
+  res.render('admin/quips', { quips, flash, error: null });
+});
+
+router.post('/quips', async (req, res) => {
+  const { text } = req.body;
+  const quips = await db.reminderQuip.findMany({ orderBy: { createdAt: 'asc' } });
+  try {
+    if (!text || !text.trim()) throw new Error('Quip text is required.');
+    await db.reminderQuip.create({ data: { text: text.trim() } });
+    res.redirect('/admin/quips?created=1');
+  } catch (err) {
+    res.render('admin/quips', { quips, flash: null, error: err.message });
+  }
+});
+
+router.post('/quips/:id/delete', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).render('error', { title: 'Bad Request', message: 'Invalid quip ID.' });
+  try {
+    await db.reminderQuip.delete({ where: { id } });
+    res.redirect('/admin/quips?deleted=1');
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).render('error', { title: 'Not Found', message: 'Quip not found.' });
+    throw err;
+  }
+});
+
 // ── Delete Log ────────────────────────────────────────────────────────────────
 
 router.post('/logs/:id/delete', async (req, res) => {

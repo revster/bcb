@@ -141,6 +141,9 @@ tr:hover td { background: #fafaf8; }
 .actions form { display: contents; }
 
 .table-count { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
+.add-quip-form { margin: 1.25rem 0; }
+.add-quip-form .form-row { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0; }
+.add-quip-form .form-row input { flex: 1; }
 .empty-state { color: var(--muted); font-style: italic; padding: 2rem 0; }
 
 /* ── Badges ────────────────────────────────────────────────────────────────── */

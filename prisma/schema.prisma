@@ -125,9 +125,25 @@ model ReadingLog {
   status      String    @default("reading")  // "reading" | "finished" | "abandoned"
   progress    Float     @default(0)   // 0–100 percentage
   rating      Float?                  // 1–5 (decimals allowed), set by /rate
-  startedAt   DateTime  @default(now())
-  finishedAt  DateTime?
-  updatedAt   DateTime  @updatedAt
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+  lastProgressAt DateTime?               // set by /progress; used for reminder scheduling
+  lastRemindedAt DateTime?               // set when a reminder is sent; prevents re-pinging within 7 days
+  updatedAt      DateTime  @updatedAt
+}
+
+// Generic key-value bot settings
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// A reminder quip posted when a member hasn't logged progress in a week
+model ReminderQuip {
+  id        Int      @id @default(autoincrement())
+  text      String
+  createdAt DateTime @default(now())
 }
 
 // A book designated as an active club read (voted by community or set by admin)

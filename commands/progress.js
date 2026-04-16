@@ -117,7 +117,7 @@ module.exports = {
 
       await db.readingLog.update({
         where: { threadId: interaction.channelId },
-        data: { status: 'finished', finishedAt, progress: 100 },
+        data: { status: 'finished', finishedAt, progress: 100, lastProgressAt: new Date() },
       });
 
       const embed = new EmbedBuilder()
@@ -158,7 +158,7 @@ module.exports = {
       const wasAbandoned = log.status === 'abandoned';
       await db.readingLog.update({
         where: { threadId: interaction.channelId },
-        data: { progress, ...(wasAbandoned && { status: 'reading' }) },
+        data: { progress, lastProgressAt: new Date(), ...(wasAbandoned && { status: 'reading' }) },
       });
 
       const resumedNote = wasAbandoned ? ' (resumed)' : '';
