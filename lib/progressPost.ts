@@ -11,7 +11,9 @@
  */
 
 import type { Guild, TextChannel } from 'discord.js';
+import { eq, inArray, asc } from 'drizzle-orm';
 import db = require('../db');
+import { clubBooks, readingLogs, memberChannels } from '../schema';
 import { buildBookEmbed } from './buildBookEmbed';
 import { botLog } from './botLog';
 
@@ -28,16 +30,16 @@ function buildBar(pct: number): string {
 }
 
 export async function updateProgressPost(bookId: number, guild: Guild): Promise<void> {
-  const clubBook = await db.clubBook.findUnique({
-    where: { bookId },
-    include: { book: true },
+  const clubBook = await db.query.clubBooks.findFirst({
+    where: (cb, { eq }) => eq(cb.bookId, bookId),
+    with: { book: true },
   });
   if (!clubBook) return;
 
-  const allLogs = await db.readingLog.findMany({
-    where: { bookId },
-    orderBy: { startedAt: 'asc' },
-  });
+  const allLogs = db.select().from(readingLogs)
+    .where(eq(readingLogs.bookId, bookId))
+    .orderBy(asc(readingLogs.startedAt))
+    .all();
   if (allLogs.length === 0) {
     await botLog(guild, `[progressPost] no reading logs for club bookId ${bookId}`);
     return;
@@ -52,10 +54,12 @@ export async function updateProgressPost(bookId: number, guild: Guild): Promise<
   }).reverse();
 
   // Build userId → username map from MemberChannel records
-  const memberChannels = await db.memberChannel.findMany({
-    where: { userId: { in: logs.map(l => l.userId) } },
-  });
-  const usernameMap = Object.fromEntries(memberChannels.map(mc => [mc.userId, mc.username]));
+  const userIds = logs.map(l => l.userId);
+  const mcRows = db.select({ userId: memberChannels.userId, username: memberChannels.username })
+    .from(memberChannels)
+    .where(inArray(memberChannels.userId, userIds))
+    .all();
+  const usernameMap = Object.fromEntries(mcRows.map(mc => [mc.userId, mc.username]));
 
   const names = logs.map(log => usernameMap[log.userId] ?? log.userId);
   const maxLen = Math.max(...names.map(n => n.length));
@@ -100,8 +104,8 @@ export async function updateProgressPost(bookId: number, guild: Guild): Promise<
 
   const embedMsg = await progressChannel.send({ content, embeds: [embed] });
   const barsMsg = await progressChannel.send({ content: barsContent });
-  await db.clubBook.update({
-    where: { bookId },
-    data: { progressMessageId: embedMsg.id, progressBarsMessageId: barsMsg.id },
-  });
+  db.update(clubBooks)
+    .set({ progressMessageId: embedMsg.id, progressBarsMessageId: barsMsg.id })
+    .where(eq(clubBooks.bookId, bookId))
+    .run();
 }

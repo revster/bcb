@@ -14,7 +14,9 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, MessageFlags, ThreadChannel, ForumChannel } from 'discord.js';
+import { eq } from 'drizzle-orm';
 import db = require('../db');
+import { readingLogs, clubBooks } from '../schema';
 import { updateProgressPost } from '../lib/progressPost';
 import { botLog } from '../lib/botLog';
 
@@ -58,9 +60,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  const log = await db.readingLog.findUnique({
-    where: { threadId: interaction.channelId },
-    include: { book: true },
+  const log = await db.query.readingLogs.findFirst({
+    where: (rl, { eq }) => eq(rl.threadId, interaction.channelId),
+    with: { book: true },
   });
 
   if (!log) {
@@ -115,10 +117,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   if (progress >= 100) {
     const finishedAt = new Date();
 
-    await db.readingLog.update({
-      where: { threadId: interaction.channelId },
-      data: { status: 'finished', finishedAt, progress: 100, lastProgressAt: new Date() },
-    });
+    db.update(readingLogs)
+      .set({ status: 'finished', finishedAt, progress: 100, lastProgressAt: new Date() })
+      .where(eq(readingLogs.threadId, interaction.channelId))
+      .run();
 
     const embed = new EmbedBuilder()
       .setTitle(log.book.title)
@@ -149,7 +151,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       await channel.setAppliedTags([...new Set([...currentTags, completedTag.id])]).catch(() => null);
     }
 
-    const clubBook = await db.clubBook.findUnique({ where: { bookId: log.bookId } });
+    const clubBook = db.select().from(clubBooks).where(eq(clubBooks.bookId, log.bookId)).get();
     if (clubBook?.epilogueThreadId) {
       const epilogueUrl = `https://discord.com/channels/${interaction.guildId}/${clubBook.epilogueThreadId}`;
       await channel.send(`Ready to discuss? Head to the epilogue thread: ${epilogueUrl}`);
@@ -162,10 +164,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     await botLog(interaction.guild!, `[finish] ${interaction.user.username} finished **${log.book.title}** by ${log.book.author}`);
   } else {
     const wasAbandoned = log.status === 'abandoned';
-    await db.readingLog.update({
-      where: { threadId: interaction.channelId },
-      data: { progress, lastProgressAt: new Date(), ...(wasAbandoned && { status: 'reading' }) },
-    });
+    db.update(readingLogs)
+      .set({ progress, lastProgressAt: new Date(), ...(wasAbandoned && { status: 'reading' }) })
+      .where(eq(readingLogs.threadId, interaction.channelId))
+      .run();
 
     const resumedNote = wasAbandoned ? ' (resumed)' : '';
     await channel.send(`📖 Progress updated: ${progressDisplay}${resumedNote}`);

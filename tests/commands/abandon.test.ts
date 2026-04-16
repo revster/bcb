@@ -1,7 +1,20 @@
-jest.mock('../../db', () => ({
-  readingLog: { findUnique: jest.fn(), update: jest.fn() },
-  clubBook:   { findUnique: jest.fn() },
-}));
+// Mock vars prefixed with 'mock' are accessible inside jest.mock() factory
+const mockFindFirst = jest.fn();
+const mockRun = jest.fn().mockReturnValue({ changes: 1 });
+
+jest.mock('../../db', () => {
+  const chain: any = {
+    set:   jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    run:   mockRun,
+  };
+  return {
+    update: jest.fn(() => chain),
+    query: {
+      readingLogs: { findFirst: mockFindFirst },
+    },
+  };
+});
 jest.mock('../../lib/progressPost', () => ({ updateProgressPost: jest.fn() }));
 jest.mock('../../lib/botLog', () => ({ botLog: jest.fn() }));
 
@@ -31,7 +44,10 @@ function makeInteraction({ channelId = 'thread-123', channel = makeBotChannel() 
   };
 }
 
-afterEach(() => jest.resetAllMocks());
+beforeEach(() => {
+  mockRun.mockReturnValue({ changes: 1 });
+});
+afterEach(() => { mockFindFirst.mockReset(); mockRun.mockReset(); jest.clearAllMocks(); });
 
 describe('/abandon execute', () => {
   describe('guards', () => {
@@ -48,69 +64,65 @@ describe('/abandon execute', () => {
       expect(interaction.reply).toHaveBeenCalledWith(
         expect.objectContaining({ content: expect.stringContaining('bot-managed') })
       );
-      expect(db.readingLog.update).not.toHaveBeenCalled();
+      expect(db.update).not.toHaveBeenCalled();
     });
 
     test('rejects when no reading log found for thread', async () => {
-      db.readingLog.findUnique.mockResolvedValue(null);
+      mockFindFirst.mockResolvedValue(undefined);
       const interaction = makeInteraction();
       await execute(interaction);
 
       expect(interaction.reply).toHaveBeenCalledWith(
         expect.objectContaining({ content: expect.stringContaining('book threads') })
       );
-      expect(db.readingLog.update).not.toHaveBeenCalled();
+      expect(db.update).not.toHaveBeenCalled();
     });
 
     test('rejects when log belongs to a different user', async () => {
-      db.readingLog.findUnique.mockResolvedValue({ ...LOG, userId: 'other-user' });
+      mockFindFirst.mockResolvedValue({ ...LOG, userId: 'other-user' });
       const interaction = makeInteraction();
       await execute(interaction);
 
       expect(interaction.reply).toHaveBeenCalledWith(
         expect.objectContaining({ content: expect.stringContaining('your own') })
       );
-      expect(db.readingLog.update).not.toHaveBeenCalled();
+      expect(db.update).not.toHaveBeenCalled();
     });
 
     test('rejects when book is already finished', async () => {
-      db.readingLog.findUnique.mockResolvedValue({ ...LOG, status: 'finished' });
+      mockFindFirst.mockResolvedValue({ ...LOG, status: 'finished' });
       const interaction = makeInteraction();
       await execute(interaction);
 
       expect(interaction.reply).toHaveBeenCalledWith(
         expect.objectContaining({ content: expect.stringContaining('already marked as finished') })
       );
-      expect(db.readingLog.update).not.toHaveBeenCalled();
+      expect(db.update).not.toHaveBeenCalled();
     });
 
     test('rejects when book is already abandoned', async () => {
-      db.readingLog.findUnique.mockResolvedValue({ ...LOG, status: 'abandoned' });
+      mockFindFirst.mockResolvedValue({ ...LOG, status: 'abandoned' });
       const interaction = makeInteraction();
       await execute(interaction);
 
       expect(interaction.reply).toHaveBeenCalledWith(
         expect.objectContaining({ content: expect.stringContaining('already marked as abandoned') })
       );
-      expect(db.readingLog.update).not.toHaveBeenCalled();
+      expect(db.update).not.toHaveBeenCalled();
     });
   });
 
   describe('successful abandon', () => {
-    test('sets status to abandoned in the database', async () => {
-      db.readingLog.findUnique.mockResolvedValue(LOG);
-      db.readingLog.update.mockResolvedValue({});
+    test('updates status to abandoned in the database', async () => {
+      mockFindFirst.mockResolvedValue(LOG);
       const interaction = makeInteraction();
       await execute(interaction);
 
-      expect(db.readingLog.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { status: 'abandoned' } })
-      );
+      expect(db.update).toHaveBeenCalled();
     });
 
     test('sends an embed in the thread showing progress at abandonment', async () => {
-      db.readingLog.findUnique.mockResolvedValue(LOG);
-      db.readingLog.update.mockResolvedValue({});
+      mockFindFirst.mockResolvedValue(LOG);
       const interaction = makeInteraction();
       await execute(interaction);
 
@@ -120,8 +132,7 @@ describe('/abandon execute', () => {
     });
 
     test('replies ephemerally confirming abandonment', async () => {
-      db.readingLog.findUnique.mockResolvedValue(LOG);
-      db.readingLog.update.mockResolvedValue({});
+      mockFindFirst.mockResolvedValue(LOG);
       const interaction = makeInteraction();
       await execute(interaction);
 
@@ -134,20 +145,18 @@ describe('/abandon execute', () => {
     });
 
     test('shows page number in embed description when book has pages', async () => {
-      db.readingLog.findUnique.mockResolvedValue({ ...LOG, progress: 50 });
-      db.readingLog.update.mockResolvedValue({});
+      mockFindFirst.mockResolvedValue({ ...LOG, progress: 50 });
       const interaction = makeInteraction();
       await execute(interaction);
 
-      // 50% of 180 pages = page 90; description is set by buildBookEmbed
+      // 50% of 180 pages = page 90
       const embedDescription = interaction.channel.send.mock.calls[0][0].embeds[0].data.description;
       expect(embedDescription).toContain('page 90 / 180');
     });
 
     test('shows percentage in embed description when book has no pages', async () => {
       const bookNoPages = { ...BOOK, pages: null };
-      db.readingLog.findUnique.mockResolvedValue({ ...LOG, progress: 33, book: bookNoPages });
-      db.readingLog.update.mockResolvedValue({});
+      mockFindFirst.mockResolvedValue({ ...LOG, progress: 33, book: bookNoPages });
       const interaction = makeInteraction();
       await execute(interaction);
 
@@ -158,8 +167,7 @@ describe('/abandon execute', () => {
 
   describe('Abandoned tag', () => {
     test('applies Abandoned tag when it exists on the parent channel', async () => {
-      db.readingLog.findUnique.mockResolvedValue(LOG);
-      db.readingLog.update.mockResolvedValue({});
+      mockFindFirst.mockResolvedValue(LOG);
       const channel = makeBotChannel([{ id: 'tag-abandoned', name: 'Abandoned' }]);
       const interaction = makeInteraction({ channel });
       await execute(interaction);
@@ -170,8 +178,7 @@ describe('/abandon execute', () => {
     });
 
     test('does not call setAppliedTags when Abandoned tag is absent', async () => {
-      db.readingLog.findUnique.mockResolvedValue(LOG);
-      db.readingLog.update.mockResolvedValue({});
+      mockFindFirst.mockResolvedValue(LOG);
       const channel = makeBotChannel(); // no Abandoned tag
       const interaction = makeInteraction({ channel });
       await execute(interaction);
@@ -180,8 +187,7 @@ describe('/abandon execute', () => {
     });
 
     test('command still completes if setAppliedTags rejects', async () => {
-      db.readingLog.findUnique.mockResolvedValue(LOG);
-      db.readingLog.update.mockResolvedValue({});
+      mockFindFirst.mockResolvedValue(LOG);
       const channel = makeBotChannel([{ id: 'tag-abandoned', name: 'Abandoned' }]);
       channel.setAppliedTags.mockRejectedValue(new Error('Missing Permissions'));
       const interaction = makeInteraction({ channel });

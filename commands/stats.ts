@@ -15,10 +15,10 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
-import type { ReadingLog, Book } from '@prisma/client';
+import { eq } from 'drizzle-orm';
 import db = require('../db');
-
-type LogWithBook = ReadingLog & { book: Book };
+import { readingLogs, clubBooks } from '../schema';
+import type { LogWithBook } from '../schema';
 
 function favouriteGenre(books: Array<{ genres: string | null }>): string | null {
   const counts: Record<string, number> = {};
@@ -62,14 +62,12 @@ function deduplicateByBook(logs: LogWithBook[]): LogWithBook[] {
 }
 
 async function buildStatsEmbed(userId: string, displayName: string): Promise<EmbedBuilder | null> {
-  const [logs, clubBookRows] = await Promise.all([
-    db.readingLog.findMany({
-      where: { userId },
-      include: { book: true },
-      orderBy: { startedAt: 'asc' },
-    }),
-    db.clubBook.findMany({ select: { bookId: true } }),
-  ]);
+  const logs = (await db.query.readingLogs.findMany({
+    where: (rl, { eq }) => eq(rl.userId, userId),
+    with: { book: true },
+    orderBy: (rl, { asc }) => [asc(rl.startedAt)],
+  })) as LogWithBook[];
+  const clubBookRows = db.select({ bookId: clubBooks.bookId }).from(clubBooks).all();
 
   if (!logs.length) return null;
 

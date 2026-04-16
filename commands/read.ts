@@ -12,7 +12,9 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, ForumChannel } from 'discord.js';
+import { eq } from 'drizzle-orm';
 import db = require('../db');
+import { memberChannels, books, readingLogs } from '../schema';
 import scrapeBook from '../lib/scrapeBook';
 import { buildBookEmbed } from '../lib/buildBookEmbed';
 import { updateProgressPost } from '../lib/progressPost';
@@ -54,9 +56,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const { title, author, rating, pages, image, genres } = bookData;
 
   // Look up the member's registered forum channel
-  const memberChannel = await db.memberChannel.findUnique({
-    where: { userId: interaction.user.id },
-  });
+  const memberChannel = db.select().from(memberChannels).where(eq(memberChannels.userId, interaction.user.id)).get();
 
   if (!memberChannel) {
     await interaction.editReply("Your reading channel hasn't been registered yet. Ask an admin to use `/register`.");
@@ -71,11 +71,14 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   }
 
   // Upsert the book record
-  const book = await db.book.upsert({
-    where: { goodreadsUrl: url },
-    update: { title, author, rating, pages, image, genres: JSON.stringify(genres) },
-    create: { title, author, rating, pages, image, genres: JSON.stringify(genres), goodreadsUrl: url },
-  });
+  const book = db.insert(books)
+    .values({ title, author, rating, pages, image, genres: JSON.stringify(genres), goodreadsUrl: url })
+    .onConflictDoUpdate({
+      target: books.goodreadsUrl,
+      set: { title, author, rating, pages, image, genres: JSON.stringify(genres) },
+    })
+    .returning()
+    .get()!;
 
   // Build the opening embed posted as the thread's first message
   const embed = buildBookEmbed(
@@ -92,13 +95,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   });
 
   // Open the reading log
-  await db.readingLog.create({
-    data: {
-      userId: interaction.user.id,
-      bookId: book.id,
-      threadId: thread.id,
-    },
-  });
+  db.insert(readingLogs).values({
+    userId: interaction.user.id,
+    bookId: book.id,
+    threadId: thread.id,
+  }).run();
 
   await interaction.editReply(`Your thread for **${title}** is live! [Jump to thread](${thread.url})`);
   await botLog(interaction.guild!, `[read] ${interaction.user.username} started **${title}** by ${author}`);

@@ -12,7 +12,9 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, ThreadChannel, ForumChannel, TextChannel } from 'discord.js';
+import { eq } from 'drizzle-orm';
 import db = require('../db');
+import { readingLogs, clubBooks } from '../schema';
 import { botLog } from '../lib/botLog';
 
 export const data = new SlashCommandBuilder()
@@ -39,9 +41,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   const rating = interaction.options.getNumber('rating', true);
 
-  const log = await db.readingLog.findUnique({
-    where: { threadId: interaction.channelId },
-    include: { book: true },
+  const log = await db.query.readingLogs.findFirst({
+    where: (rl, { eq }) => eq(rl.threadId, interaction.channelId),
+    with: { book: true },
   });
 
   if (!log) {
@@ -60,10 +62,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  await db.readingLog.update({
-    where: { threadId: interaction.channelId },
-    data: { rating },
-  });
+  db.update(readingLogs)
+    .set({ rating })
+    .where(eq(readingLogs.threadId, interaction.channelId))
+    .run();
 
   const stars = Math.floor(rating);
   const half = rating % 1 >= 0.5 ? '½' : '';
@@ -74,7 +76,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   await interaction.reply({ content: `Rating saved: ${starDisplay} (${rating})`, flags: MessageFlags.Ephemeral });
   await botLog(interaction.guild!, `[rate] ${interaction.user.username} — **${log.book.title}**: ${starDisplay} (${rating})`);
 
-  const clubBook = await db.clubBook.findUnique({ where: { bookId: log.bookId } });
+  const clubBook = db.select().from(clubBooks).where(eq(clubBooks.bookId, log.bookId)).get();
   if (clubBook?.epilogueThreadId) {
     try {
       const epilogueThread = await interaction.guild!.channels.fetch(clubBook.epilogueThreadId) as TextChannel;

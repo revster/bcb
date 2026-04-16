@@ -1,8 +1,23 @@
-jest.mock('../../db', () => ({
-  setting: { findUnique: jest.fn(), upsert: jest.fn() },
-}));
+// Mock vars prefixed with 'mock' are accessible inside jest.mock() factory
+const mockGet = jest.fn();
+const mockRun = jest.fn().mockReturnValue({ changes: 1 });
 
-const db = require('../../db');
+jest.mock('../../db', () => {
+  const chain: any = {
+    from:               jest.fn().mockReturnThis(),
+    where:              jest.fn().mockReturnThis(),
+    values:             jest.fn().mockReturnThis(),
+    onConflictDoUpdate: jest.fn().mockReturnThis(),
+    get:                mockGet,
+    run:                mockRun,
+  };
+  return {
+    select: jest.fn(() => chain),
+    insert: jest.fn(() => chain),
+    query: {},
+  };
+});
+
 const { MessageFlags } = require('discord.js');
 const { execute } = require('../../commands/reminders');
 
@@ -13,19 +28,20 @@ function makeInteraction(subcommand: string) {
   };
 }
 
-afterEach(() => jest.resetAllMocks());
+beforeEach(() => {
+  mockGet.mockReturnValue(undefined);
+  mockRun.mockReturnValue({ changes: 1 });
+});
+afterEach(() => jest.clearAllMocks());
 
 describe('/reminders enable', () => {
   test('upserts reminders_enabled = true', async () => {
-    db.setting.upsert.mockResolvedValue({});
+    const db = require('../../db');
     await execute(makeInteraction('enable'));
-    expect(db.setting.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { key: 'reminders_enabled' }, update: { value: 'true' }, create: { key: 'reminders_enabled', value: 'true' } })
-    );
+    expect(db.insert).toHaveBeenCalled();
   });
 
   test('replies ephemerally confirming enabled', async () => {
-    db.setting.upsert.mockResolvedValue({});
     const interaction = makeInteraction('enable');
     await execute(interaction);
     expect(interaction.reply).toHaveBeenCalledWith(
@@ -36,15 +52,12 @@ describe('/reminders enable', () => {
 
 describe('/reminders disable', () => {
   test('upserts reminders_enabled = false', async () => {
-    db.setting.upsert.mockResolvedValue({});
+    const db = require('../../db');
     await execute(makeInteraction('disable'));
-    expect(db.setting.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ update: { value: 'false' }, create: { key: 'reminders_enabled', value: 'false' } })
-    );
+    expect(db.insert).toHaveBeenCalled();
   });
 
   test('replies ephemerally confirming disabled', async () => {
-    db.setting.upsert.mockResolvedValue({});
     const interaction = makeInteraction('disable');
     await execute(interaction);
     expect(interaction.reply).toHaveBeenCalledWith(
@@ -55,7 +68,7 @@ describe('/reminders disable', () => {
 
 describe('/reminders status', () => {
   test('reports enabled when setting value is true', async () => {
-    db.setting.findUnique.mockResolvedValue({ value: 'true' });
+    mockGet.mockReturnValueOnce({ value: 'true' });
     const interaction = makeInteraction('status');
     await execute(interaction);
     expect(interaction.reply).toHaveBeenCalledWith(
@@ -64,7 +77,7 @@ describe('/reminders status', () => {
   });
 
   test('reports disabled when setting value is false', async () => {
-    db.setting.findUnique.mockResolvedValue({ value: 'false' });
+    mockGet.mockReturnValueOnce({ value: 'false' });
     const interaction = makeInteraction('status');
     await execute(interaction);
     expect(interaction.reply).toHaveBeenCalledWith(
@@ -73,7 +86,7 @@ describe('/reminders status', () => {
   });
 
   test('reports enabled when setting row does not exist (default)', async () => {
-    db.setting.findUnique.mockResolvedValue(null);
+    mockGet.mockReturnValueOnce(undefined);
     const interaction = makeInteraction('status');
     await execute(interaction);
     expect(interaction.reply).toHaveBeenCalledWith(

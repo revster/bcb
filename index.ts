@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import cron = require('node-cron');
 import db = require('./db');
+import { users } from './schema';
 import { sendReminders } from './lib/reminders';
 import { botLog } from './lib/botLog';
 
@@ -62,11 +63,12 @@ client.on('interactionCreate', async (interaction) => {
   if (!command) return;
 
   // Fire-and-forget: keep a userId → username record, updated on every interaction
-  db.user.upsert({
-    where: { userId: interaction.user.id },
-    update: { username: interaction.user.username },
-    create: { userId: interaction.user.id, username: interaction.user.username },
-  }).catch(() => {});
+  try {
+    db.insert(users)
+      .values({ userId: interaction.user.id, username: interaction.user.username })
+      .onConflictDoUpdate({ target: users.userId, set: { username: interaction.user.username } })
+      .run();
+  } catch { /* non-critical */ }
 
   try {
     await command.execute(interaction);

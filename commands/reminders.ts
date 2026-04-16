@@ -6,7 +6,9 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits } from 'discord.js';
+import { eq } from 'drizzle-orm';
 import db = require('../db');
+import { settings } from '../schema';
 
 export const data = new SlashCommandBuilder()
   .setName('reminders')
@@ -27,17 +29,16 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   if (sub === 'enable' || sub === 'disable') {
     const value = sub === 'enable' ? 'true' : 'false';
-    await db.setting.upsert({
-      where:  { key: 'reminders_enabled' },
-      update: { value },
-      create: { key: 'reminders_enabled', value },
-    });
+    db.insert(settings)
+      .values({ key: 'reminders_enabled', value })
+      .onConflictDoUpdate({ target: settings.key, set: { value } })
+      .run();
     const msg = sub === 'enable'
       ? 'Weekly reading reminders are now **enabled**.'
       : 'Weekly reading reminders are now **disabled**.';
     await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
   } else {
-    const setting = await db.setting.findUnique({ where: { key: 'reminders_enabled' } });
+    const setting = db.select().from(settings).where(eq(settings.key, 'reminders_enabled')).get();
     const enabled = setting?.value !== 'false';
     await interaction.reply({
       content: `Weekly reading reminders are currently **${enabled ? 'enabled' : 'disabled'}**.`,

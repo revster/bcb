@@ -12,8 +12,10 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
-import type { ReadingLog } from '@prisma/client';
+import { inArray, asc } from 'drizzle-orm';
 import db = require('../db');
+import { clubBooks, readingLogs } from '../schema';
+import type { ReadingLog } from '../schema';
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -48,22 +50,22 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   await interaction.deferReply();
 
-  const clubBooks = await db.clubBook.findMany({
-    include: { book: true },
-    orderBy: { createdAt: 'asc' },
+  const clubBookRows = await db.query.clubBooks.findMany({
+    with: { book: true },
+    orderBy: (cb, { asc }) => [asc(cb.createdAt)],
   });
 
-  if (!clubBooks.length) {
+  if (!clubBookRows.length) {
     await interaction.editReply({ content: 'No Book of the Month data found.' });
     return;
   }
 
-  const clubBookIds = clubBooks.map(cb => cb.bookId);
+  const clubBookIds = clubBookRows.map(cb => cb.bookId);
 
-  const rawLogs = await db.readingLog.findMany({
-    where: { bookId: { in: clubBookIds } },
-    orderBy: { startedAt: 'asc' },
-  });
+  const rawLogs = db.select().from(readingLogs)
+    .where(inArray(readingLogs.bookId, clubBookIds))
+    .orderBy(asc(readingLogs.startedAt))
+    .all();
 
   const logs = deduplicateByLatest(rawLogs);
 
@@ -75,7 +77,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     if (log.status === 'abandoned') abandoned[log.bookId] = (abandoned[log.bookId] ?? 0) + 1;
   }
 
-  const rows = clubBooks
+  const rows = clubBookRows
     .filter(cb => (abandoned[cb.bookId] ?? 0) > 0)
     .map(cb => {
       const monthYear = (cb.month && cb.year)

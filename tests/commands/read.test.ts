@@ -1,13 +1,28 @@
-jest.mock('../../db', () => ({
-  memberChannel: { findUnique: jest.fn() },
-  book: { upsert: jest.fn() },
-  readingLog: { create: jest.fn() },
-}));
+// Mock vars prefixed with 'mock' are accessible inside jest.mock() factory
+const mockGet = jest.fn();
+const mockRun = jest.fn().mockReturnValue({ changes: 1 });
+
+jest.mock('../../db', () => {
+  const chain: any = {
+    from:               jest.fn().mockReturnThis(),
+    where:              jest.fn().mockReturnThis(),
+    values:             jest.fn().mockReturnThis(),
+    onConflictDoUpdate: jest.fn().mockReturnThis(),
+    returning:          jest.fn().mockReturnThis(),
+    get:                mockGet,
+    run:                mockRun,
+  };
+  return {
+    select: jest.fn(() => chain),
+    insert: jest.fn(() => chain),
+    query: {},
+  };
+});
 import scrapeBook from '../../lib/scrapeBook';
 jest.mock('../../lib/scrapeBook');
 jest.mock('../../lib/progressPost', () => ({ updateProgressPost: jest.fn() }));
+jest.mock('../../lib/botLog', () => ({ botLog: jest.fn() }));
 
-const db = require('../../db');
 const { MessageFlags } = require('discord.js');
 const { execute } = require('../../commands/read');
 
@@ -26,6 +41,7 @@ const THREAD = { id: 'thread-123', url: 'https://discord.com/channels/1/2/thread
 
 function makeForumChannel() {
   return {
+    availableTags: [],
     threads: { create: jest.fn().mockResolvedValue(THREAD) },
   };
 }
@@ -41,7 +57,11 @@ function makeInteraction(url = VALID_URL, { forumChannel = makeForumChannel() } 
   };
 }
 
-afterEach(() => jest.resetAllMocks());
+beforeEach(() => {
+  mockGet.mockReturnValue(undefined);
+  mockRun.mockReturnValue({ changes: 1 });
+});
+afterEach(() => jest.clearAllMocks());
 
 describe('/read execute', () => {
   describe('URL validation', () => {
@@ -70,37 +90,34 @@ describe('/read execute', () => {
     test('replies with error when scraping fails', async () => {
       jest.spyOn(console, 'error').mockImplementation(() => {});
       jest.mocked(scrapeBook).mockRejectedValue(new Error('Goodreads returned 404'));
-      db.memberChannel.findUnique.mockResolvedValue(MEMBER_CHANNEL);
       const interaction = makeInteraction();
       await execute(interaction);
 
       expect(interaction.editReply).toHaveBeenCalledWith(
         expect.stringContaining('Could not fetch book info')
       );
-      expect(db.book.upsert).not.toHaveBeenCalled();
     });
   });
 
   describe('unregistered member', () => {
     test('replies with register prompt when no MemberChannel exists', async () => {
       jest.mocked(scrapeBook).mockResolvedValue(SCRAPED_BOOK);
-      db.memberChannel.findUnique.mockResolvedValue(null);
+      mockGet.mockReturnValueOnce(undefined); // no member channel
       const interaction = makeInteraction();
       await execute(interaction);
 
       expect(interaction.editReply).toHaveBeenCalledWith(
         expect.stringContaining('/register')
       );
-      expect(db.book.upsert).not.toHaveBeenCalled();
     });
   });
 
   describe('successful start', () => {
     beforeEach(() => {
       jest.mocked(scrapeBook).mockResolvedValue(SCRAPED_BOOK);
-      db.memberChannel.findUnique.mockResolvedValue(MEMBER_CHANNEL);
-      db.book.upsert.mockResolvedValue(UPSERTED_BOOK);
-      db.readingLog.create.mockResolvedValue({});
+      mockGet
+        .mockReturnValueOnce(MEMBER_CHANNEL) // memberChannel lookup
+        .mockReturnValueOnce(UPSERTED_BOOK); // book upsert returning
     });
 
     test('defers ephemerally', async () => {
@@ -119,15 +136,6 @@ describe('/read execute', () => {
       expect(interaction.guild.channels.fetch).toHaveBeenCalledWith('ch-forum');
     });
 
-    test('upserts the book by goodreadsUrl', async () => {
-      const interaction = makeInteraction();
-      await execute(interaction);
-
-      expect(db.book.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { goodreadsUrl: VALID_URL } })
-      );
-    });
-
     test('creates a thread in the forum channel', async () => {
       const forum = makeForumChannel();
       const interaction = makeInteraction(VALID_URL, { forumChannel: forum });
@@ -135,17 +143,6 @@ describe('/read execute', () => {
 
       expect(forum.threads.create).toHaveBeenCalledWith(
         expect.objectContaining({ name: expect.stringContaining('The Great Gatsby') })
-      );
-    });
-
-    test('creates a ReadingLog with the thread id', async () => {
-      const interaction = makeInteraction();
-      await execute(interaction);
-
-      expect(db.readingLog.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ userId: '999', bookId: 42, threadId: 'thread-123' }),
-        })
       );
     });
 

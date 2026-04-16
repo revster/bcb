@@ -10,52 +10,45 @@
  */
 
 import type { Client } from 'discord.js';
+import { eq, and, or, inArray, isNull, lt } from 'drizzle-orm';
 import db = require('../db');
+import { settings, clubBooks, readingLogs, reminderQuips } from '../schema';
 import { botLog } from './botLog';
 
 export async function sendReminders(client: Client): Promise<void> {
-  const setting = await db.setting.findUnique({ where: { key: 'reminders_enabled' } });
+  const setting = db.select().from(settings).where(eq(settings.key, 'reminders_enabled')).get();
   if (setting?.value === 'false') return;
 
   const now = new Date();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   // Find all BOTMs for the current month (there may be more than one)
-  const clubBooks = await db.clubBook.findMany({
-    where: {
-      month: now.getMonth() + 1,
-      year:  now.getFullYear(),
-    },
-  });
+  const clubBookRows = db.select({ bookId: clubBooks.bookId }).from(clubBooks)
+    .where(and(eq(clubBooks.month, now.getMonth() + 1), eq(clubBooks.year, now.getFullYear())))
+    .all();
 
-  if (clubBooks.length === 0) return;
+  if (clubBookRows.length === 0) return;
 
-  const bookIds = clubBooks.map(cb => cb.bookId);
+  const bookIds = clubBookRows.map(cb => cb.bookId);
 
-  const staleLogs = await db.readingLog.findMany({
-    where: {
-      bookId: { in: bookIds },
-      status: 'reading',
-      AND: [
-        {
-          OR: [
-            { lastProgressAt: { lt: sevenDaysAgo } },
-            { lastProgressAt: null, startedAt: { lt: sevenDaysAgo } },
-          ],
-        },
-        {
-          OR: [
-            { lastRemindedAt: null },
-            { lastRemindedAt: { lt: sevenDaysAgo } },
-          ],
-        },
-      ],
-    },
-  });
+  const staleLogs = db.select().from(readingLogs).where(
+    and(
+      inArray(readingLogs.bookId, bookIds),
+      eq(readingLogs.status, 'reading'),
+      or(
+        lt(readingLogs.lastProgressAt, sevenDaysAgo),
+        and(isNull(readingLogs.lastProgressAt), lt(readingLogs.startedAt, sevenDaysAgo))
+      ),
+      or(
+        isNull(readingLogs.lastRemindedAt),
+        lt(readingLogs.lastRemindedAt, sevenDaysAgo)
+      )
+    )
+  ).all();
 
   if (staleLogs.length === 0) return;
 
-  const quips = await db.reminderQuip.findMany();
+  const quips = db.select().from(reminderQuips).all();
   if (quips.length === 0) return;
 
   for (const log of staleLogs) {
@@ -69,10 +62,7 @@ export async function sendReminders(client: Client): Promise<void> {
 
       await thread.send(`<@${log.userId}> ${quip.text}`);
 
-      await db.readingLog.update({
-        where: { id: log.id },
-        data:  { lastRemindedAt: now },
-      });
+      db.update(readingLogs).set({ lastRemindedAt: now }).where(eq(readingLogs.id, log.id)).run();
     } catch (err) {
       const guild = client.guilds.cache.first();
       if (guild) await botLog(guild, `[reminders] failed to remind user ${log.userId}: ${(err as Error)?.message ?? String(err)}`);

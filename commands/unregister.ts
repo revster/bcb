@@ -7,7 +7,9 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, MessageFlags } from 'discord.js';
+import { eq } from 'drizzle-orm';
 import db = require('../db');
+import { memberChannels } from '../schema';
 import { botLog } from '../lib/botLog';
 
 export const data = new SlashCommandBuilder()
@@ -21,7 +23,7 @@ export const data = new SlashCommandBuilder()
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
   const user = interaction.options.getUser('user', true);
 
-  const existing = await db.memberChannel.findUnique({ where: { userId: user.id } });
+  const existing = db.select().from(memberChannels).where(eq(memberChannels.userId, user.id)).get();
 
   if (!existing) {
     await interaction.reply({
@@ -31,7 +33,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  await db.memberChannel.delete({ where: { userId: user.id } });
+  db.delete(memberChannels).where(eq(memberChannels.userId, user.id)).run();
 
   await interaction.reply({
     content: `Unregistered <@${user.id}>. Their existing threads and reading logs are unchanged.`,

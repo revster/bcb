@@ -6,7 +6,9 @@
 
 const express = require('express');
 const router = express.Router();
+import { eq, desc } from 'drizzle-orm';
 const db = require('../../db');
+import { books, readingLogs, users, memberChannels } from '../../schema';
 import scrapeBook from '../../lib/scrapeBook';
 const requireAdmin = require('../middleware/requireAdmin');
 
@@ -20,7 +22,7 @@ router.get('/books/scrape', async (req: any, res: any) => {
 
   try {
     // Return existing book if already in DB
-    const existing = await db.book.findUnique({ where: { goodreadsUrl: url } });
+    const existing = db.select().from(books).where(eq(books.goodreadsUrl, url as string)).get();
     if (existing) return res.json({ ...existing, fromDb: true });
 
     const scraped = await scrapeBook(url);
@@ -32,24 +34,23 @@ router.get('/books/scrape', async (req: any, res: any) => {
 
 // List all known members (merged User + MemberChannel)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-router.get('/members', async (_req: any, res: any) => {
-  const [users, members] = await Promise.all([
-    db.user.findMany(),
-    db.memberChannel.findMany(),
-  ]);
+router.get('/members', (_req: any, res: any) => {
   const map = new Map<string, { userId: string; username: string }>();
-  for (const m of members) map.set(m.userId, { userId: m.userId, username: m.username });
-  for (const u of users)   map.set(u.userId, { userId: u.userId, username: u.username });
-  res.json([...map.values()].sort((a, b) => a.username.localeCompare(b.username)));
+  for (const m of db.select({ userId: memberChannels.userId, username: memberChannels.username }).from(memberChannels).all())
+    map.set(m.userId, m);
+  for (const u of db.select({ userId: users.userId, username: users.username }).from(users).all())
+    map.set(u.userId, u);
+  res.json([...map.values()].sort((a: any, b: any) => a.username.localeCompare(b.username)));
 });
 
 // List reading logs (JSON)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-router.get('/logs', async (_req: any, res: any) => {
-  const logs = await db.readingLog.findMany({
-    include:  { book: true },
-    orderBy:  { startedAt: 'desc' },
-  });
+router.get('/logs', (_req: any, res: any) => {
+  const logs = db.select().from(readingLogs)
+    .leftJoin(books, eq(readingLogs.bookId, books.id))
+    .orderBy(desc(readingLogs.startedAt))
+    .all()
+    .map((row: any) => ({ ...row.ReadingLog, book: row.Book }));
   res.json(logs);
 });
 

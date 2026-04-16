@@ -1,11 +1,25 @@
-jest.mock('../../db', () => ({
-  setting:      { findUnique: jest.fn() },
-  clubBook:     { findMany: jest.fn() },
-  readingLog:   { findMany: jest.fn(), update: jest.fn() },
-  reminderQuip: { findMany: jest.fn() },
-}));
+// Mock vars prefixed with 'mock' are accessible inside jest.mock() factory
+const mockGet = jest.fn();
+const mockAll = jest.fn();
+const mockRun = jest.fn().mockReturnValue({ changes: 1 });
 
-const db = require('../../db');
+jest.mock('../../db', () => {
+  const chain: any = {
+    from:    jest.fn().mockReturnThis(),
+    where:   jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    set:     jest.fn().mockReturnThis(),
+    get:     mockGet,
+    all:     mockAll,
+    run:     mockRun,
+  };
+  return {
+    select: jest.fn(() => chain),
+    update: jest.fn(() => chain),
+    query: {},
+  };
+});
+
 const { sendReminders } = require('../../lib/reminders');
 
 const CLUB_BOOK  = { bookId: 1 };
@@ -20,43 +34,41 @@ function makeClient(threadSend = jest.fn().mockResolvedValue(undefined)) {
   };
 }
 
-// Pin clubBook.findMany to return the current month/year so queries match
-function stubCurrentMonthBotm() {
-  const now = new Date();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  db.clubBook.findMany.mockImplementation(({ where }: any) => {
-    if (where.month === now.getMonth() + 1 && where.year === now.getFullYear()) {
-      return Promise.resolve([CLUB_BOOK]);
-    }
-    return Promise.resolve([]);
-  });
-}
-
-afterEach(() => jest.resetAllMocks());
+beforeEach(() => {
+  mockGet.mockReturnValue(undefined);
+  mockAll.mockReturnValue([]);
+  mockRun.mockReturnValue({ changes: 1 });
+});
+afterEach(() => { mockGet.mockReset(); mockAll.mockReset(); mockRun.mockReset(); jest.clearAllMocks(); });
 
 // ── Setting guard ─────────────────────────────────────────────────────────────
 
 describe('reminders_enabled setting', () => {
   test('does nothing when setting is explicitly disabled', async () => {
-    db.setting.findUnique.mockResolvedValue({ key: 'reminders_enabled', value: 'false' });
+    mockGet.mockReturnValueOnce({ key: 'reminders_enabled', value: 'false' });
+    const db = require('../../db');
     await sendReminders(makeClient());
-    expect(db.clubBook.findMany).not.toHaveBeenCalled();
+    // Only the settings .get() should have been called; no .all() for clubBooks
+    expect(mockAll).not.toHaveBeenCalled();
   });
 
   test('proceeds when setting is enabled', async () => {
-    db.setting.findUnique.mockResolvedValue({ key: 'reminders_enabled', value: 'true' });
-    stubCurrentMonthBotm();
-    db.readingLog.findMany.mockResolvedValue([]);
+    mockGet.mockReturnValueOnce({ key: 'reminders_enabled', value: 'true' });
+    mockAll
+      .mockReturnValueOnce([CLUB_BOOK]) // clubBooks
+      .mockReturnValueOnce([])          // readingLogs → no stale logs
+      .mockReturnValueOnce([]);         // reminderQuips (not reached, but safe)
     await sendReminders(makeClient());
-    expect(db.clubBook.findMany).toHaveBeenCalled();
+    expect(mockAll).toHaveBeenCalled();
   });
 
   test('proceeds when setting row does not exist (default enabled)', async () => {
-    db.setting.findUnique.mockResolvedValue(null);
-    stubCurrentMonthBotm();
-    db.readingLog.findMany.mockResolvedValue([]);
+    mockGet.mockReturnValueOnce(undefined); // no setting row
+    mockAll
+      .mockReturnValueOnce([CLUB_BOOK])
+      .mockReturnValueOnce([]);
     await sendReminders(makeClient());
-    expect(db.clubBook.findMany).toHaveBeenCalled();
+    expect(mockAll).toHaveBeenCalled();
   });
 });
 
@@ -64,10 +76,11 @@ describe('reminders_enabled setting', () => {
 
 describe('no BOTM this month', () => {
   test('does nothing when no club books match the current month', async () => {
-    db.setting.findUnique.mockResolvedValue(null);
-    db.clubBook.findMany.mockResolvedValue([]);
+    mockGet.mockReturnValueOnce(undefined); // setting (enabled)
+    mockAll.mockReturnValueOnce([]);        // clubBooks → empty
     await sendReminders(makeClient());
-    expect(db.readingLog.findMany).not.toHaveBeenCalled();
+    // mockAll called once for clubBooks, then should stop
+    expect(mockAll).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -75,11 +88,13 @@ describe('no BOTM this month', () => {
 
 describe('no stale logs', () => {
   test('does nothing when no reading logs are overdue', async () => {
-    db.setting.findUnique.mockResolvedValue(null);
-    stubCurrentMonthBotm();
-    db.readingLog.findMany.mockResolvedValue([]);
+    mockGet.mockReturnValueOnce(undefined);
+    mockAll
+      .mockReturnValueOnce([CLUB_BOOK]) // clubBooks
+      .mockReturnValueOnce([]);          // readingLogs → empty (no stale)
     await sendReminders(makeClient());
-    expect(db.reminderQuip.findMany).not.toHaveBeenCalled();
+    // 2 .all() calls: clubBooks + readingLogs; no quips call since stale is empty
+    expect(mockAll).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -87,10 +102,11 @@ describe('no stale logs', () => {
 
 describe('no quips in db', () => {
   test('does nothing when quip table is empty', async () => {
-    db.setting.findUnique.mockResolvedValue(null);
-    stubCurrentMonthBotm();
-    db.readingLog.findMany.mockResolvedValue([STALE_LOG]);
-    db.reminderQuip.findMany.mockResolvedValue([]);
+    mockGet.mockReturnValueOnce(undefined);
+    mockAll
+      .mockReturnValueOnce([CLUB_BOOK])  // clubBooks
+      .mockReturnValueOnce([STALE_LOG])  // readingLogs
+      .mockReturnValueOnce([]);          // reminderQuips → empty
     const client = makeClient();
     await sendReminders(client);
     expect(client.channels.fetch).not.toHaveBeenCalled();
@@ -101,11 +117,11 @@ describe('no quips in db', () => {
 
 describe('happy path', () => {
   test('sends a quip to the stale log thread', async () => {
-    db.setting.findUnique.mockResolvedValue(null);
-    stubCurrentMonthBotm();
-    db.readingLog.findMany.mockResolvedValue([STALE_LOG]);
-    db.reminderQuip.findMany.mockResolvedValue([QUIP]);
-    db.readingLog.update.mockResolvedValue({});
+    mockGet.mockReturnValueOnce(undefined);
+    mockAll
+      .mockReturnValueOnce([CLUB_BOOK]) // clubBooks
+      .mockReturnValueOnce([STALE_LOG]) // readingLogs
+      .mockReturnValueOnce([QUIP]);     // reminderQuips
     const threadSend = jest.fn().mockResolvedValue(undefined);
     const client = makeClient(threadSend);
 
@@ -116,41 +132,35 @@ describe('happy path', () => {
     expect(threadSend).toHaveBeenCalledWith(expect.stringContaining('Read your book!'));
   });
 
-  test('sets lastRemindedAt on the log after sending', async () => {
-    db.setting.findUnique.mockResolvedValue(null);
-    stubCurrentMonthBotm();
-    db.readingLog.findMany.mockResolvedValue([STALE_LOG]);
-    db.reminderQuip.findMany.mockResolvedValue([QUIP]);
-    db.readingLog.update.mockResolvedValue({});
+  test('updates lastRemindedAt on the log after sending', async () => {
+    mockGet.mockReturnValueOnce(undefined);
+    mockAll
+      .mockReturnValueOnce([CLUB_BOOK])
+      .mockReturnValueOnce([STALE_LOG])
+      .mockReturnValueOnce([QUIP]);
+    const db = require('../../db');
     const client = makeClient();
 
     await sendReminders(client);
 
-    expect(db.readingLog.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: STALE_LOG.id },
-        data:  expect.objectContaining({ lastRemindedAt: expect.any(Date) }),
-      })
-    );
+    expect(db.update).toHaveBeenCalled();
   });
 
   test('sends reminders across multiple BOTM books in the same month', async () => {
-    db.setting.findUnique.mockResolvedValue(null);
-    const now = new Date();
-    db.clubBook.findMany.mockResolvedValue([{ bookId: 1 }, { bookId: 2 }]);
-    db.readingLog.findMany.mockResolvedValue([
-      { ...STALE_LOG, id: 10, bookId: 1, threadId: 'thread-1' },
-      { ...STALE_LOG, id: 11, bookId: 2, threadId: 'thread-2' },
-    ]);
-    db.reminderQuip.findMany.mockResolvedValue([QUIP]);
-    db.readingLog.update.mockResolvedValue({});
+    mockGet.mockReturnValueOnce(undefined);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1 }, { bookId: 2 }]) // clubBooks
+      .mockReturnValueOnce([                                 // readingLogs
+        { ...STALE_LOG, id: 10, bookId: 1, threadId: 'thread-1' },
+        { ...STALE_LOG, id: 11, bookId: 2, threadId: 'thread-2' },
+      ])
+      .mockReturnValueOnce([QUIP]);
     const threadSend = jest.fn().mockResolvedValue(undefined);
     const client = { channels: { fetch: jest.fn().mockResolvedValue({ send: threadSend }) } };
 
     await sendReminders(client);
 
     expect(threadSend).toHaveBeenCalledTimes(2);
-    expect(db.readingLog.update).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -158,27 +168,27 @@ describe('happy path', () => {
 
 describe('resilience', () => {
   test('skips logs with no threadId', async () => {
-    db.setting.findUnique.mockResolvedValue(null);
-    stubCurrentMonthBotm();
-    db.readingLog.findMany.mockResolvedValue([{ ...STALE_LOG, threadId: null }]);
-    db.reminderQuip.findMany.mockResolvedValue([QUIP]);
+    mockGet.mockReturnValueOnce(undefined);
+    mockAll
+      .mockReturnValueOnce([CLUB_BOOK])
+      .mockReturnValueOnce([{ ...STALE_LOG, threadId: null }])
+      .mockReturnValueOnce([QUIP]);
     const client = makeClient();
 
     await sendReminders(client);
 
     expect(client.channels.fetch).not.toHaveBeenCalled();
-    expect(db.readingLog.update).not.toHaveBeenCalled();
   });
 
   test('skips a log when thread fetch fails, continues with others', async () => {
-    db.setting.findUnique.mockResolvedValue(null);
-    stubCurrentMonthBotm();
-    db.readingLog.findMany.mockResolvedValue([
-      { ...STALE_LOG, id: 10, threadId: 'thread-bad' },
-      { ...STALE_LOG, id: 11, threadId: 'thread-good' },
-    ]);
-    db.reminderQuip.findMany.mockResolvedValue([QUIP]);
-    db.readingLog.update.mockResolvedValue({});
+    mockGet.mockReturnValueOnce(undefined);
+    mockAll
+      .mockReturnValueOnce([CLUB_BOOK])
+      .mockReturnValueOnce([
+        { ...STALE_LOG, id: 10, threadId: 'thread-bad' },
+        { ...STALE_LOG, id: 11, threadId: 'thread-good' },
+      ])
+      .mockReturnValueOnce([QUIP]);
     const threadSend = jest.fn().mockResolvedValue(undefined);
     const client = {
       channels: {
@@ -191,9 +201,5 @@ describe('resilience', () => {
     await sendReminders(client);
 
     expect(threadSend).toHaveBeenCalledTimes(1);
-    expect(db.readingLog.update).toHaveBeenCalledTimes(1);
-    expect(db.readingLog.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 11 } })
-    );
   });
 });

@@ -12,8 +12,10 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
-import type { ReadingLog } from '@prisma/client';
+import { eq, inArray } from 'drizzle-orm';
 import db = require('../db');
+import { clubBooks, readingLogs } from '../schema';
+import type { ReadingLog } from '../schema';
 import { resolveUsernames } from '../lib/resolveUsernames';
 
 /**
@@ -65,12 +67,11 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   await interaction.deferReply();
 
-  const clubBooks = await db.clubBook.findMany({
-    where: year ? { year } : {},
-    select: { bookId: true },
-  });
+  const clubBookRows = year
+    ? db.select({ bookId: clubBooks.bookId }).from(clubBooks).where(eq(clubBooks.year, year)).all()
+    : db.select({ bookId: clubBooks.bookId }).from(clubBooks).all();
 
-  if (!clubBooks.length) {
+  if (!clubBookRows.length) {
     await interaction.editReply({
       content: year
         ? `No Book of the Month data found for ${year}.`
@@ -79,11 +80,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  const clubBookIds = clubBooks.map(cb => cb.bookId);
+  const clubBookIds = clubBookRows.map(cb => cb.bookId);
 
-  const rawLogs = await db.readingLog.findMany({
-    where: { bookId: { in: clubBookIds } },
-  });
+  const rawLogs = db.select().from(readingLogs).where(inArray(readingLogs.bookId, clubBookIds)).all();
 
   const { enrolled, finished } = userStats(rawLogs);
 

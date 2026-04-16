@@ -13,7 +13,9 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits, ForumChannel } from 'discord.js';
+import { eq } from 'drizzle-orm';
 import db = require('../db');
+import { books, clubBooks, memberChannels, readingLogs } from '../schema';
 import scrapeBook from '../lib/scrapeBook';
 import { buildBookEmbed } from '../lib/buildBookEmbed';
 import { updateProgressPost } from '../lib/progressPost';
@@ -57,7 +59,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   // Find existing book record or scrape it fresh
-  let book = await db.book.findUnique({ where: { goodreadsUrl: url } });
+  let book = db.select().from(books).where(eq(books.goodreadsUrl, url)).get();
   if (!book) {
     let scraped: Awaited<ReturnType<typeof scrapeBook>> | null = null;
     try {
@@ -69,25 +71,31 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       return;
     }
     const { title, author, rating, pages, image, genres } = scraped;
-    book = await db.book.upsert({
-      where: { goodreadsUrl: url },
-      update: { title, author, rating, pages, image, genres: JSON.stringify(genres) },
-      create: { title, author, rating, pages, image, genres: JSON.stringify(genres), goodreadsUrl: url },
-    });
+    book = db.insert(books)
+      .values({ title, author, rating, pages, image, genres: JSON.stringify(genres), goodreadsUrl: url })
+      .onConflictDoUpdate({
+        target: books.goodreadsUrl,
+        set: { title, author, rating, pages, image, genres: JSON.stringify(genres) },
+      })
+      .returning()
+      .get()!;
   }
 
-  const clubBook = await db.clubBook.upsert({
-    where: { bookId: book.id },
-    update: { ...(month !== null && { month }), ...(year !== null && { year }) },
-    create: { bookId: book.id, month, year },
-  });
+  const clubBook = db.insert(clubBooks)
+    .values({ bookId: book.id, month, year })
+    .onConflictDoUpdate({
+      target: clubBooks.bookId,
+      set: { ...(month !== null && { month }), ...(year !== null && { year }) },
+    })
+    .returning()
+    .get()!;
 
   // Create a thread in every registered member's forum channel
-  const memberChannels = await db.memberChannel.findMany();
+  const allMemberChannels = db.select().from(memberChannels).all();
   const embed = buildBookEmbed(book, `Started reading on ${new Date().toDateString()}`);
 
   const results = await Promise.allSettled(
-    memberChannels.map(async mc => {
+    allMemberChannels.map(async mc => {
       const forumChannel = await interaction.guild!.channels.fetch(mc.channelId) as ForumChannel;
 
       // Collect tag IDs for any matching tag names that exist on this channel
@@ -102,9 +110,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         appliedTags,
       });
 
-      await db.readingLog.create({
-        data: { userId: mc.userId, bookId: book!.id, threadId: thread.id },
-      });
+      db.insert(readingLogs).values({ userId: mc.userId, bookId: book!.id, threadId: thread.id }).run();
 
       return { username: mc.username, status: 'created' };
     })
@@ -124,10 +130,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
         message: { embeds: [buildBookEmbed(book, 'Spoilers welcome — discuss freely once you\'ve finished.')] },
         appliedTags: epilogueTagIds,
       });
-      await db.clubBook.update({
-        where: { bookId: book.id },
-        data: { epilogueThreadId: epilogueThread.id },
-      });
+      db.update(clubBooks).set({ epilogueThreadId: epilogueThread.id }).where(eq(clubBooks.bookId, book.id)).run();
       epilogueUrl = epilogueThread.url;
     }
   }
@@ -139,8 +142,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     .filter((r): r is PromiseFulfilledResult<{ username: string; status: string }> => r.status === 'fulfilled')
     .map(r => r.value.username);
   const failures = results
-    .map((r, i) => ({ r, mc: memberChannels[i] }))
-    .filter(({ r }) => r.status === 'rejected') as Array<{ r: PromiseRejectedResult; mc: typeof memberChannels[number] }>;
+    .map((r, i) => ({ r, mc: allMemberChannels[i] }))
+    .filter(({ r }) => r.status === 'rejected') as Array<{ r: PromiseRejectedResult; mc: typeof allMemberChannels[number] }>;
 
   const monthYearStr = (month && year) ? ` (${MONTHS[month - 1]} ${year})` : '';
   const lines = [`**${book.title}**${monthYearStr} is now the active club read.`];

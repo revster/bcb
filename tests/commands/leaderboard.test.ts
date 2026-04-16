@@ -1,13 +1,23 @@
-jest.mock('../../db', () => ({
-  clubBook: { findMany: jest.fn() },
-  readingLog: { findMany: jest.fn() },
-}));
+// Mock vars prefixed with 'mock' are accessible inside jest.mock() factory
+const mockAll = jest.fn();
+
+jest.mock('../../db', () => {
+  const chain: any = {
+    from:    jest.fn().mockReturnThis(),
+    where:   jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    all:     mockAll,
+  };
+  return {
+    select: jest.fn(() => chain),
+    query: {},
+  };
+});
 
 jest.mock('../../lib/resolveUsernames', () => ({
   resolveUsernames: jest.fn(),
 }));
 
-const db = require('../../db');
 const { resolveUsernames } = require('../../lib/resolveUsernames');
 const { execute } = require('../../commands/leaderboard');
 
@@ -17,7 +27,7 @@ function makeInteraction({ year = null as number | null } = {}) {
   return {
     options: { getInteger: jest.fn().mockReturnValue(year) },
     deferReply: jest.fn().mockResolvedValue(undefined),
-    editReply: jest.fn().mockResolvedValue(undefined),
+    editReply:  jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -31,13 +41,16 @@ function getReplyContent(interaction: any) {
   return interaction.editReply.mock.calls[0][0].content;
 }
 
-afterEach(() => jest.resetAllMocks());
+beforeEach(() => {
+  mockAll.mockReturnValue([]);
+});
+afterEach(() => jest.clearAllMocks());
 
 // ── All-time leaderboard ──────────────────────────────────────────────────────
 
 describe('/leaderboard all-time (no year)', () => {
   test('replies with no-data message when there are no club books', async () => {
-    db.clubBook.findMany.mockResolvedValue([]);
+    mockAll.mockReturnValueOnce([]); // clubBooks → empty
     const interaction = makeInteraction();
     await execute(interaction);
 
@@ -45,8 +58,9 @@ describe('/leaderboard all-time (no year)', () => {
   });
 
   test('replies with no-data message when there are club books but no finished logs', async () => {
-    db.clubBook.findMany.mockResolvedValue([{ bookId: 1 }]);
-    db.readingLog.findMany.mockResolvedValue([]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1 }]) // clubBooks
+      .mockReturnValueOnce([]);              // readingLogs → empty
     const interaction = makeInteraction();
     await execute(interaction);
 
@@ -54,35 +68,36 @@ describe('/leaderboard all-time (no year)', () => {
   });
 
   test('shows members ranked by finished club book count', async () => {
-    db.clubBook.findMany.mockResolvedValue([{ bookId: 1 }, { bookId: 2 }, { bookId: 3 }]);
-    db.readingLog.findMany.mockResolvedValue([
-      { userId: 'alice', bookId: 1, status: 'finished' },
-      { userId: 'alice', bookId: 2, status: 'finished' },
-      { userId: 'alice', bookId: 3, status: 'finished' },
-      { userId: 'bob',   bookId: 1, status: 'finished' },
-    ]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1 }, { bookId: 2 }, { bookId: 3 }])
+      .mockReturnValueOnce([
+        { userId: 'alice', bookId: 1, status: 'finished' },
+        { userId: 'alice', bookId: 2, status: 'finished' },
+        { userId: 'alice', bookId: 3, status: 'finished' },
+        { userId: 'bob',   bookId: 1, status: 'finished' },
+      ]);
     resolveUsernames.mockResolvedValue({ alice: 'alice', bob: 'bob' });
 
     const interaction = makeInteraction();
     await execute(interaction);
 
     const desc = getEmbed(interaction).data.description;
-    // alice should appear before bob
     expect(desc.indexOf('alice')).toBeLessThan(desc.indexOf('bob'));
     expect(desc).toContain('alice');
     expect(desc).toContain('bob');
   });
 
   test('assigns gold, silver, bronze medals to top 3', async () => {
-    db.clubBook.findMany.mockResolvedValue([{ bookId: 1 }, { bookId: 2 }, { bookId: 3 }]);
-    db.readingLog.findMany.mockResolvedValue([
-      { userId: 'alice', bookId: 1, status: 'finished' },
-      { userId: 'alice', bookId: 2, status: 'finished' },
-      { userId: 'alice', bookId: 3, status: 'finished' },
-      { userId: 'bob',   bookId: 1, status: 'finished' },
-      { userId: 'bob',   bookId: 2, status: 'finished' },
-      { userId: 'carol', bookId: 1, status: 'finished' },
-    ]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1 }, { bookId: 2 }, { bookId: 3 }])
+      .mockReturnValueOnce([
+        { userId: 'alice', bookId: 1, status: 'finished' },
+        { userId: 'alice', bookId: 2, status: 'finished' },
+        { userId: 'alice', bookId: 3, status: 'finished' },
+        { userId: 'bob',   bookId: 1, status: 'finished' },
+        { userId: 'bob',   bookId: 2, status: 'finished' },
+        { userId: 'carol', bookId: 1, status: 'finished' },
+      ]);
     resolveUsernames.mockResolvedValue({ alice: 'alice', bob: 'bob', carol: 'carol' });
 
     const interaction = makeInteraction();
@@ -95,16 +110,17 @@ describe('/leaderboard all-time (no year)', () => {
   });
 
   test('uses numeric rank for positions beyond 3', async () => {
-    db.clubBook.findMany.mockResolvedValue([{ bookId: 1 }, { bookId: 2 }]);
-    db.readingLog.findMany.mockResolvedValue([
-      { userId: 'a', bookId: 1, status: 'finished' },
-      { userId: 'a', bookId: 2, status: 'finished' },
-      { userId: 'b', bookId: 1, status: 'finished' },
-      { userId: 'b', bookId: 2, status: 'finished' },
-      { userId: 'c', bookId: 1, status: 'finished' },
-      { userId: 'c', bookId: 2, status: 'finished' },
-      { userId: 'd', bookId: 1, status: 'finished' },
-    ]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1 }, { bookId: 2 }])
+      .mockReturnValueOnce([
+        { userId: 'a', bookId: 1, status: 'finished' },
+        { userId: 'a', bookId: 2, status: 'finished' },
+        { userId: 'b', bookId: 1, status: 'finished' },
+        { userId: 'b', bookId: 2, status: 'finished' },
+        { userId: 'c', bookId: 1, status: 'finished' },
+        { userId: 'c', bookId: 2, status: 'finished' },
+        { userId: 'd', bookId: 1, status: 'finished' },
+      ]);
     resolveUsernames.mockResolvedValue({ a: 'alice', b: 'bob', c: 'carol', d: 'dave' });
 
     const interaction = makeInteraction();
@@ -115,11 +131,12 @@ describe('/leaderboard all-time (no year)', () => {
   });
 
   test('deduplicates re-reads: two finished logs for same userId:bookId count as 1', async () => {
-    db.clubBook.findMany.mockResolvedValue([{ bookId: 1 }]);
-    db.readingLog.findMany.mockResolvedValue([
-      { userId: 'alice', bookId: 1, status: 'finished' },
-      { userId: 'alice', bookId: 1, status: 'finished' }, // duplicate (re-read or re-run)
-    ]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1 }])
+      .mockReturnValueOnce([
+        { userId: 'alice', bookId: 1, status: 'finished' },
+        { userId: 'alice', bookId: 1, status: 'finished' },
+      ]);
     resolveUsernames.mockResolvedValue({ alice: 'alice' });
 
     const interaction = makeInteraction();
@@ -130,12 +147,13 @@ describe('/leaderboard all-time (no year)', () => {
   });
 
   test('uses singular "book" for count of 1, plural "books" for more', async () => {
-    db.clubBook.findMany.mockResolvedValue([{ bookId: 1 }, { bookId: 2 }]);
-    db.readingLog.findMany.mockResolvedValue([
-      { userId: 'alice', bookId: 1, status: 'finished' },
-      { userId: 'alice', bookId: 2, status: 'finished' },
-      { userId: 'bob',   bookId: 1, status: 'finished' },
-    ]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1 }, { bookId: 2 }])
+      .mockReturnValueOnce([
+        { userId: 'alice', bookId: 1, status: 'finished' },
+        { userId: 'alice', bookId: 2, status: 'finished' },
+        { userId: 'bob',   bookId: 1, status: 'finished' },
+      ]);
     resolveUsernames.mockResolvedValue({ alice: 'alice', bob: 'bob' });
 
     const interaction = makeInteraction();
@@ -147,29 +165,23 @@ describe('/leaderboard all-time (no year)', () => {
   });
 
   test('only counts finished logs, not reading or abandoned', async () => {
-    // buildAllTime queries with status:'finished' — mock returns only what that query would return
-    db.clubBook.findMany.mockResolvedValue([{ bookId: 1 }, { bookId: 2 }]);
-    db.readingLog.findMany.mockResolvedValue([
-      { userId: 'alice', bookId: 1, status: 'finished' },
-      // alice's reading log and bob's abandoned log are filtered out by the DB query
-      // so the mock only returns the one finished log
-    ]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1 }, { bookId: 2 }])
+      .mockReturnValueOnce([{ userId: 'alice', bookId: 1, status: 'finished' }]);
     resolveUsernames.mockResolvedValue({ alice: 'alice' });
 
     const interaction = makeInteraction();
     await execute(interaction);
 
-    // Only alice should appear (she has 1 finish); bob has no finished logs returned
     const desc = getEmbed(interaction).data.description;
     expect(desc).toContain('alice');
     expect(desc).not.toContain('bob');
   });
 
   test('embed title says All Time', async () => {
-    db.clubBook.findMany.mockResolvedValue([{ bookId: 1 }]);
-    db.readingLog.findMany.mockResolvedValue([
-      { userId: 'alice', bookId: 1, status: 'finished' },
-    ]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1 }])
+      .mockReturnValueOnce([{ userId: 'alice', bookId: 1, status: 'finished' }]);
     resolveUsernames.mockResolvedValue({ alice: 'alice' });
 
     const interaction = makeInteraction();
@@ -183,7 +195,7 @@ describe('/leaderboard all-time (no year)', () => {
 
 describe('/leaderboard year grid', () => {
   test('replies with no-data message when no club books for that year', async () => {
-    db.clubBook.findMany.mockResolvedValue([]);
+    mockAll.mockReturnValueOnce([]); // clubBooks → empty
     const interaction = makeInteraction({ year: 2025 });
     await execute(interaction);
 
@@ -191,8 +203,9 @@ describe('/leaderboard year grid', () => {
   });
 
   test('replies with no-data message when club books exist but no logs', async () => {
-    db.clubBook.findMany.mockResolvedValue([{ bookId: 1, month: 1 }]);
-    db.readingLog.findMany.mockResolvedValue([]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1, month: 1 }])
+      .mockReturnValueOnce([]); // readingLogs → empty
     const interaction = makeInteraction({ year: 2025 });
     await execute(interaction);
 
@@ -200,12 +213,9 @@ describe('/leaderboard year grid', () => {
   });
 
   test('description is wrapped in a code block', async () => {
-    db.clubBook.findMany.mockResolvedValue([
-      { bookId: 1, month: 1 },
-    ]);
-    db.readingLog.findMany.mockResolvedValue([
-      { userId: 'alice', bookId: 1, status: 'finished' },
-    ]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1, month: 1 }])
+      .mockReturnValueOnce([{ userId: 'alice', bookId: 1, status: 'finished' }]);
     resolveUsernames.mockResolvedValue({ alice: 'alice' });
 
     const interaction = makeInteraction({ year: 2025 });
@@ -217,14 +227,12 @@ describe('/leaderboard year grid', () => {
   });
 
   test('shows ✓ for finished and - for not finished', async () => {
-    db.clubBook.findMany.mockResolvedValue([
-      { bookId: 1, month: 1 },
-      { bookId: 2, month: 2 },
-    ]);
-    db.readingLog.findMany.mockResolvedValue([
-      { userId: 'alice', bookId: 1, status: 'finished' },
-      { userId: 'alice', bookId: 2, status: 'reading' },   // not finished
-    ]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1, month: 1 }, { bookId: 2, month: 2 }])
+      .mockReturnValueOnce([
+        { userId: 'alice', bookId: 1, status: 'finished' },
+        { userId: 'alice', bookId: 2, status: 'reading' },
+      ]);
     resolveUsernames.mockResolvedValue({ alice: 'alice' });
 
     const interaction = makeInteraction({ year: 2025 });
@@ -236,10 +244,9 @@ describe('/leaderboard year grid', () => {
   });
 
   test('embed title includes the year', async () => {
-    db.clubBook.findMany.mockResolvedValue([{ bookId: 1, month: 3 }]);
-    db.readingLog.findMany.mockResolvedValue([
-      { userId: 'alice', bookId: 1, status: 'finished' },
-    ]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1, month: 3 }])
+      .mockReturnValueOnce([{ userId: 'alice', bookId: 1, status: 'finished' }]);
     resolveUsernames.mockResolvedValue({ alice: 'alice' });
 
     const interaction = makeInteraction({ year: 2025 });
@@ -249,13 +256,9 @@ describe('/leaderboard year grid', () => {
   });
 
   test('grid header contains month abbreviations for club books', async () => {
-    db.clubBook.findMany.mockResolvedValue([
-      { bookId: 1, month: 1 },
-      { bookId: 2, month: 6 },
-    ]);
-    db.readingLog.findMany.mockResolvedValue([
-      { userId: 'alice', bookId: 1, status: 'finished' },
-    ]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1, month: 1 }, { bookId: 2, month: 6 }])
+      .mockReturnValueOnce([{ userId: 'alice', bookId: 1, status: 'finished' }]);
     resolveUsernames.mockResolvedValue({ alice: 'alice' });
 
     const interaction = makeInteraction({ year: 2025 });
@@ -267,15 +270,13 @@ describe('/leaderboard year grid', () => {
   });
 
   test('totals row appears in the grid', async () => {
-    db.clubBook.findMany.mockResolvedValue([
-      { bookId: 1, month: 1 },
-      { bookId: 2, month: 2 },
-    ]);
-    db.readingLog.findMany.mockResolvedValue([
-      { userId: 'alice', bookId: 1, status: 'finished' },
-      { userId: 'alice', bookId: 2, status: 'finished' },
-      { userId: 'bob',   bookId: 1, status: 'finished' },
-    ]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1, month: 1 }, { bookId: 2, month: 2 }])
+      .mockReturnValueOnce([
+        { userId: 'alice', bookId: 1, status: 'finished' },
+        { userId: 'alice', bookId: 2, status: 'finished' },
+        { userId: 'bob',   bookId: 1, status: 'finished' },
+      ]);
     resolveUsernames.mockResolvedValue({ alice: 'alice', bob: 'bob' });
 
     const interaction = makeInteraction({ year: 2025 });
@@ -286,18 +287,18 @@ describe('/leaderboard year grid', () => {
   });
 
   test('deduplicates re-reads in year grid: finished wins over reading for same userId:bookId', async () => {
-    db.clubBook.findMany.mockResolvedValue([{ bookId: 1, month: 1 }]);
-    db.readingLog.findMany.mockResolvedValue([
-      { userId: 'alice', bookId: 1, status: 'finished' },
-      { userId: 'alice', bookId: 1, status: 'reading' }, // re-run log
-    ]);
+    mockAll
+      .mockReturnValueOnce([{ bookId: 1, month: 1 }])
+      .mockReturnValueOnce([
+        { userId: 'alice', bookId: 1, status: 'finished' },
+        { userId: 'alice', bookId: 1, status: 'reading' },
+      ]);
     resolveUsernames.mockResolvedValue({ alice: 'alice' });
 
     const interaction = makeInteraction({ year: 2025 });
     await execute(interaction);
 
     const desc = getEmbed(interaction).data.description;
-    // alice should show ✓ not - for book 1
     expect(desc).toContain('✓');
   });
 });

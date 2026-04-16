@@ -6,16 +6,18 @@
  * and MemberChannel (username at registration time). User table wins on conflict.
  */
 
+import { inArray } from 'drizzle-orm';
 import db = require('../db');
+import { users, memberChannels } from '../schema';
 
 export async function resolveUsernames(userIds: string[]): Promise<Record<string, string>> {
   if (!userIds.length) return {};
-  const [users, members] = await Promise.all([
-    db.user.findMany({ where: { userId: { in: userIds } } }),
-    db.memberChannel.findMany({ where: { userId: { in: userIds } } }),
-  ]);
+  const [userRows, memberRows] = [
+    db.select({ userId: users.userId, username: users.username }).from(users).where(inArray(users.userId, userIds)).all(),
+    db.select({ userId: memberChannels.userId, username: memberChannels.username }).from(memberChannels).where(inArray(memberChannels.userId, userIds)).all(),
+  ];
   const map: Record<string, string> = {};
-  for (const m of members) map[m.userId] = m.username;
-  for (const u of users)   map[u.userId] = u.username; // User table wins (more recent)
+  for (const m of memberRows) map[m.userId] = m.username;
+  for (const u of userRows)   map[u.userId] = u.username; // User table wins (more recent)
   return map;
 }

@@ -14,7 +14,9 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
+import { eq, and, isNotNull, inArray, asc } from 'drizzle-orm';
 import db = require('../db');
+import { clubBooks, readingLogs } from '../schema';
 import { resolveUsernames } from '../lib/resolveUsernames';
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -23,14 +25,14 @@ const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
 // ─── All-time leaderboard ────────────────────────────────────────────────────
 
 async function buildAllTime(): Promise<EmbedBuilder | null> {
-  const clubBooks = await db.clubBook.findMany({ select: { bookId: true } });
-  if (!clubBooks.length) return null;
+  const clubBookRows = db.select({ bookId: clubBooks.bookId }).from(clubBooks).all();
+  if (!clubBookRows.length) return null;
 
-  const clubBookIds = clubBooks.map(cb => cb.bookId);
+  const clubBookIds = clubBookRows.map(cb => cb.bookId);
 
-  const logs = await db.readingLog.findMany({
-    where: { bookId: { in: clubBookIds }, status: 'finished' },
-  });
+  const logs = db.select().from(readingLogs)
+    .where(and(inArray(readingLogs.bookId, clubBookIds), eq(readingLogs.status, 'finished')))
+    .all();
 
   if (!logs.length) return null;
 
@@ -68,19 +70,19 @@ async function buildAllTime(): Promise<EmbedBuilder | null> {
 
 async function buildYearGrid(year: number): Promise<EmbedBuilder | null> {
   // Club books for this year that have a month assigned, sorted by month
-  const clubBooks = await db.clubBook.findMany({
-    where: { year, month: { not: null } },
-    orderBy: { month: 'asc' },
-  });
+  const clubBookRows = db.select().from(clubBooks)
+    .where(and(eq(clubBooks.year, year), isNotNull(clubBooks.month)))
+    .orderBy(asc(clubBooks.month))
+    .all();
 
-  if (!clubBooks.length) return null;
+  if (!clubBookRows.length) return null;
 
-  const clubBookIds = clubBooks.map(cb => cb.bookId);
+  const clubBookIds = clubBookRows.map(cb => cb.bookId);
 
   // All reading logs for this year's club books (any status)
-  const logs = await db.readingLog.findMany({
-    where: { bookId: { in: clubBookIds } },
-  });
+  const logs = db.select().from(readingLogs)
+    .where(inArray(readingLogs.bookId, clubBookIds))
+    .all();
 
   if (!logs.length) return null;
 
@@ -96,7 +98,7 @@ async function buildYearGrid(year: number): Promise<EmbedBuilder | null> {
   // Build rows: one per user, sorted by total finished desc then name asc
   const rows = userIds.map(userId => {
     const name = usernameMap[userId] ?? userId;
-    const cells = clubBooks.map(cb =>
+    const cells = clubBookRows.map(cb =>
       finishedSet.has(`${userId}:${cb.bookId}`) ? '✓' : '-'
     );
     const total = cells.filter(c => c === '✓').length;
@@ -104,7 +106,7 @@ async function buildYearGrid(year: number): Promise<EmbedBuilder | null> {
   }).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
 
   // Column totals (how many members finished each month)
-  const colTotals = clubBooks.map((_, colIdx) =>
+  const colTotals = clubBookRows.map((_, colIdx) =>
     rows.filter(r => r.cells[colIdx] === '✓').length
   );
 
@@ -119,7 +121,7 @@ async function buildYearGrid(year: number): Promise<EmbedBuilder | null> {
     return ' '.repeat(left) + str + ' '.repeat(total - left);
   };
 
-  const months = clubBooks.map(cb => MONTH_ABBR[(cb.month ?? 1) - 1]);
+  const months = clubBookRows.map(cb => MONTH_ABBR[(cb.month ?? 1) - 1]);
 
   // Header row
   const header = pad('', maxNameLen + 2)

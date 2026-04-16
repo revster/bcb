@@ -7,7 +7,9 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, ThreadChannel, ForumChannel } from 'discord.js';
+import { eq } from 'drizzle-orm';
 import db = require('../db');
+import { readingLogs } from '../schema';
 import { buildBookEmbed } from '../lib/buildBookEmbed';
 import { updateProgressPost } from '../lib/progressPost';
 import { botLog } from '../lib/botLog';
@@ -27,9 +29,9 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  const log = await db.readingLog.findUnique({
-    where: { threadId: interaction.channelId },
-    include: { book: true },
+  const log = await db.query.readingLogs.findFirst({
+    where: (rl, { eq }) => eq(rl.threadId, interaction.channelId),
+    with: { book: true },
   });
 
   if (!log) {
@@ -64,10 +66,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  await db.readingLog.update({
-    where: { threadId: interaction.channelId },
-    data: { status: 'abandoned' },
-  });
+  db.update(readingLogs)
+    .set({ status: 'abandoned' })
+    .where(eq(readingLogs.threadId, interaction.channelId))
+    .run();
 
   const progressDisplay = log.book.pages
     ? `page ${Math.round((log.progress / 100) * log.book.pages)} / ${log.book.pages}`

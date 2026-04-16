@@ -10,6 +10,7 @@
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, ChannelType, MessageFlags } from 'discord.js';
 import db = require('../db');
+import { memberChannels } from '../schema';
 import { botLog } from '../lib/botLog';
 
 export const data = new SlashCommandBuilder()
@@ -35,11 +36,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     return;
   }
 
-  await db.memberChannel.upsert({
-    where: { userId: user.id },
-    update: { channelId: channel.id, username: user.displayName ?? user.username },
-    create: { userId: user.id, username: user.displayName ?? user.username, channelId: channel.id },
-  });
+  db.insert(memberChannels)
+    .values({ userId: user.id, username: user.displayName ?? user.username, channelId: channel.id })
+    .onConflictDoUpdate({
+      target: memberChannels.userId,
+      set: { channelId: channel.id, username: user.displayName ?? user.username },
+    })
+    .run();
 
   await interaction.reply({
     content: `Registered <@${user.id}>'s reading channel as <#${channel.id}>.`,

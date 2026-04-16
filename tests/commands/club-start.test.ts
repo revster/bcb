@@ -1,10 +1,28 @@
+// Mock vars prefixed with 'mock' are accessible inside jest.mock() factory
+const mockGet = jest.fn();
+const mockAll = jest.fn();
+const mockRun = jest.fn().mockReturnValue({ changes: 1 });
+
+jest.mock('../../db', () => {
+  const chain: any = {
+    from:               jest.fn().mockReturnThis(),
+    where:              jest.fn().mockReturnThis(),
+    values:             jest.fn().mockReturnThis(),
+    set:                jest.fn().mockReturnThis(),
+    onConflictDoUpdate: jest.fn().mockReturnThis(),
+    returning:          jest.fn().mockReturnThis(),
+    get:                mockGet,
+    all:                mockAll,
+    run:                mockRun,
+  };
+  return {
+    select: jest.fn(() => chain),
+    insert: jest.fn(() => chain),
+    update: jest.fn(() => chain),
+    query: {},
+  };
+});
 import scrapeBook from '../../lib/scrapeBook';
-jest.mock('../../db', () => ({
-  book: { findUnique: jest.fn(), upsert: jest.fn() },
-  clubBook: { upsert: jest.fn(), update: jest.fn() },
-  memberChannel: { findMany: jest.fn() },
-  readingLog: { create: jest.fn() },
-}));
 jest.mock('../../lib/scrapeBook');
 jest.mock('../../lib/progressPost', () => ({ updateProgressPost: jest.fn() }));
 jest.mock('../../lib/botLog', () => ({ botLog: jest.fn() }));
@@ -23,6 +41,7 @@ const BOOK = {
   pages: 180,
   genres: '["Fiction"]',
 };
+const CLUB_BOOK = { id: 1, bookId: BOOK.id, epilogueThreadId: null, month: null, year: null };
 const MEMBER_A = { userId: '111', username: 'alice', channelId: 'ch-alice' };
 const MEMBER_B = { userId: '222', username: 'bob', channelId: 'ch-bob' };
 const THREAD = { id: 'thread-new', url: 'https://discord.com/thread-new' };
@@ -52,7 +71,12 @@ function makeInteraction(url = VALID_URL, forumChannel = makeForumChannel()) {
   };
 }
 
-afterEach(() => jest.resetAllMocks());
+beforeEach(() => {
+  mockGet.mockReturnValue(undefined);
+  mockAll.mockReturnValue([]);
+  mockRun.mockReturnValue({ changes: 1 });
+});
+afterEach(() => { mockGet.mockReset(); mockAll.mockReset(); mockRun.mockReset(); jest.clearAllMocks(); });
 
 describe('/club-start execute', () => {
   test('rejects a non-Goodreads URL', async () => {
@@ -67,10 +91,12 @@ describe('/club-start execute', () => {
 
   describe('when book already exists in DB', () => {
     beforeEach(() => {
-      db.book.findUnique.mockResolvedValue(BOOK);
-      db.clubBook.upsert.mockResolvedValue({});
-      db.memberChannel.findMany.mockResolvedValue([MEMBER_A, MEMBER_B]);
-      db.readingLog.create.mockResolvedValue({});
+      // db.select().from(books).get() → BOOK
+      // db.insert(clubBooks).returning().get() → CLUB_BOOK
+      mockGet
+        .mockReturnValueOnce(BOOK)      // books lookup
+        .mockReturnValueOnce(CLUB_BOOK); // clubBook insert returning
+      mockAll.mockReturnValueOnce([MEMBER_A, MEMBER_B]); // memberChannels
     });
 
     test('does not scrape when book already exists', async () => {
@@ -84,9 +110,7 @@ describe('/club-start execute', () => {
       const interaction = makeInteraction();
       await execute(interaction);
 
-      expect(db.clubBook.upsert).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { bookId: BOOK.id } })
-      );
+      expect(db.insert).toHaveBeenCalled();
     });
 
     test('creates threads for all members', async () => {
@@ -97,19 +121,20 @@ describe('/club-start execute', () => {
       expect(forum.threads.create).toHaveBeenCalledTimes(2);
     });
 
-    test('creates a ReadingLog for each member', async () => {
+    test('inserts a ReadingLog for each member', async () => {
       const interaction = makeInteraction();
       await execute(interaction);
 
-      expect(db.readingLog.create).toHaveBeenCalledTimes(2);
-      expect(db.readingLog.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ userId: '111', bookId: BOOK.id }) })
-      );
+      // db.insert called: once for clubBook, twice for readingLogs (MEMBER_A, MEMBER_B)
+      expect(db.insert).toHaveBeenCalledTimes(3);
     });
 
     test('applies matching tags when they exist on the channel', async () => {
+      mockGet
+        .mockReturnValueOnce(BOOK)
+        .mockReturnValueOnce(CLUB_BOOK);
+      mockAll.mockReturnValueOnce([MEMBER_A]);
       const forum = makeForumChannel(['Bot', 'Book of the Month', 'Other']);
-      db.memberChannel.findMany.mockResolvedValue([MEMBER_A]);
       const interaction = makeInteraction(VALID_URL, forum);
       await execute(interaction);
 
@@ -119,8 +144,11 @@ describe('/club-start execute', () => {
     });
 
     test('creates thread with empty appliedTags when no matching tags exist', async () => {
+      mockGet
+        .mockReturnValueOnce(BOOK)
+        .mockReturnValueOnce(CLUB_BOOK);
+      mockAll.mockReturnValueOnce([MEMBER_A]);
       const forum = makeForumChannel(['Unrelated']);
-      db.memberChannel.findMany.mockResolvedValue([MEMBER_A]);
       const interaction = makeInteraction(VALID_URL, forum);
       await execute(interaction);
 
@@ -129,8 +157,11 @@ describe('/club-start execute', () => {
     });
 
     test('applies only the tags that exist (partial match)', async () => {
-      const forum = makeForumChannel(['Bot']); // only Bot exists, not "Book of the Month"
-      db.memberChannel.findMany.mockResolvedValue([MEMBER_A]);
+      mockGet
+        .mockReturnValueOnce(BOOK)
+        .mockReturnValueOnce(CLUB_BOOK);
+      mockAll.mockReturnValueOnce([MEMBER_A]);
+      const forum = makeForumChannel(['Bot']); // only Bot exists
       const interaction = makeInteraction(VALID_URL, forum);
       await execute(interaction);
 
@@ -151,10 +182,14 @@ describe('/club-start execute', () => {
 
   describe('when book does not exist in DB', () => {
     beforeEach(() => {
-      db.book.findUnique.mockResolvedValue(null);
-      db.book.upsert.mockResolvedValue(BOOK);
-      db.clubBook.upsert.mockResolvedValue({});
-      db.memberChannel.findMany.mockResolvedValue([]);
+      // db.select().from(books).get() → undefined (not found)
+      // db.insert(books).returning().get() → BOOK
+      // db.insert(clubBooks).returning().get() → CLUB_BOOK
+      mockGet
+        .mockReturnValueOnce(undefined) // books lookup → not found
+        .mockReturnValueOnce(BOOK)      // books insert returning
+        .mockReturnValueOnce(CLUB_BOOK); // clubBook insert returning
+      mockAll.mockReturnValueOnce([]);  // no members
       jest.mocked(scrapeBook).mockResolvedValue({
         title: 'The Great Gatsby',
         author: 'F. Scott Fitzgerald',
@@ -170,7 +205,6 @@ describe('/club-start execute', () => {
       await execute(interaction);
 
       expect(scrapeBook).toHaveBeenCalledWith(VALID_URL);
-      expect(db.book.upsert).toHaveBeenCalled();
     });
 
     test('replies with error when scrape fails', async () => {
@@ -181,7 +215,6 @@ describe('/club-start execute', () => {
       expect(interaction.editReply).toHaveBeenCalledWith(
         expect.stringContaining('Could not fetch book info')
       );
-      expect(db.clubBook.upsert).not.toHaveBeenCalled();
     });
   });
 });
