@@ -14,18 +14,19 @@ const BOOK_NO_PAGES = { title: 'Some Book', goodreadsUrl: 'https://www.goodreads
 const LOG = { userId: '999', bookId: 1, status: 'reading', progress: 0, startedAt: new Date(), book: BOOK_WITH_PAGES };
 
 // Channel that passes the bot-managed thread guard
-function makeBotChannel() {
+function makeBotChannel(extraTags: Array<{ id: string; name: string }> = []) {
   return {
     send: jest.fn().mockResolvedValue(undefined),
-    parent: { availableTags: [{ id: 'tag-bot', name: 'Bot' }] },
+    setAppliedTags: jest.fn().mockResolvedValue(undefined),
+    parent: { availableTags: [{ id: 'tag-bot', name: 'Bot' }, ...extraTags] },
     appliedTags: ['tag-bot'],
   };
 }
 
-function makeInteraction({ page = null as number | null, percentage = null as number | null, channelId = 'thread-123' } = {}) {
+function makeInteraction({ page = null as number | null, percentage = null as number | null, channelId = 'thread-123', channel = makeBotChannel() } = {}) {
   return {
     channelId,
-    channel: makeBotChannel(),
+    channel,
     guild: { channels: { cache: { find: jest.fn().mockReturnValue(null) } }, guildId: 'guild-123' },
     guildId: 'guild-123',
     user: { id: '999', username: 'alice' },
@@ -179,6 +180,46 @@ describe('/progress execute', () => {
 
       expect(interaction.reply).toHaveBeenCalledWith(
         expect.objectContaining({ flags: MessageFlags.Ephemeral })
+      );
+    });
+  });
+
+  describe('Completed tag on finish', () => {
+    test('applies Completed tag when it exists on the parent channel', async () => {
+      db.readingLog.findUnique.mockResolvedValue(LOG);
+      db.readingLog.update.mockResolvedValue({});
+      db.clubBook.findUnique.mockResolvedValue(null);
+      const channel = makeBotChannel([{ id: 'tag-completed', name: 'Completed' }]);
+      const interaction = makeInteraction({ percentage: 100, channel });
+      await execute(interaction);
+
+      expect(channel.setAppliedTags).toHaveBeenCalledWith(
+        expect.arrayContaining(['tag-bot', 'tag-completed'])
+      );
+    });
+
+    test('does not call setAppliedTags when Completed tag is absent', async () => {
+      db.readingLog.findUnique.mockResolvedValue(LOG);
+      db.readingLog.update.mockResolvedValue({});
+      db.clubBook.findUnique.mockResolvedValue(null);
+      const channel = makeBotChannel(); // no Completed tag
+      const interaction = makeInteraction({ percentage: 100, channel });
+      await execute(interaction);
+
+      expect(channel.setAppliedTags).not.toHaveBeenCalled();
+    });
+
+    test('command still completes if setAppliedTags rejects', async () => {
+      db.readingLog.findUnique.mockResolvedValue(LOG);
+      db.readingLog.update.mockResolvedValue({});
+      db.clubBook.findUnique.mockResolvedValue(null);
+      const channel = makeBotChannel([{ id: 'tag-completed', name: 'Completed' }]);
+      channel.setAppliedTags.mockRejectedValue(new Error('Missing Permissions'));
+      const interaction = makeInteraction({ percentage: 100, channel });
+      await execute(interaction);
+
+      expect(interaction.reply).toHaveBeenCalledWith(
+        expect.objectContaining({ content: expect.stringContaining('finished') })
       );
     });
   });

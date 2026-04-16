@@ -143,6 +143,12 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
     await channel.send({ embeds: [embed] });
 
+    const completedTag = (channel.parent as ForumChannel | null)?.availableTags?.find(t => t.name === 'Completed');
+    if (completedTag) {
+      const currentTags = channel.appliedTags as string[] ?? [];
+      await channel.setAppliedTags([...new Set([...currentTags, completedTag.id])]).catch(() => null);
+    }
+
     const clubBook = await db.clubBook.findUnique({ where: { bookId: log.bookId } });
     if (clubBook?.epilogueThreadId) {
       const epilogueUrl = `https://discord.com/channels/${interaction.guildId}/${clubBook.epilogueThreadId}`;

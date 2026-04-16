@@ -79,6 +79,13 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   );
 
   await channel.send({ embeds: [embed] });
+
+  const abandonedTag = (channel.parent as ForumChannel | null)?.availableTags?.find(t => t.name === 'Abandoned');
+  if (abandonedTag) {
+    const currentTags = channel.appliedTags as string[] ?? [];
+    await channel.setAppliedTags([...new Set([...currentTags, abandonedTag.id])]).catch(() => null);
+  }
+
   await interaction.reply({
     content: `Marked **${log.book.title}** as abandoned.`,
     flags: MessageFlags.Ephemeral,

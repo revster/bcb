@@ -20,6 +20,7 @@ A Discord bot for managing a book club server. Core features:
 ## Branches
 
 - `main` — stable; contains all merged features to date. **This is the only branch pushed to remote.**
+- `features/typescript` — full TypeScript migration of the entire codebase (not yet merged into main)
 - `features/voting` — nominations and ranked voting system (not yet merged)
 - `features/reading-tracker` — personal reading tracker + club read tracking (merged into main)
 - `features/reports` — report commands /stats, /leaderboard, /finishers, /abandoners, /abandoned (merged into main)
@@ -43,11 +44,12 @@ Requires a `.env` file with:
 
 ```bash
 npm install                            # Install dependencies
-npm run bot                            # Start the Discord bot (node index.js)
+npm run bot                            # Start the Discord bot (tsx index.ts)
 npm run website                        # Start the admin web panel (http://localhost:3000)
-node deploy-commands.js                # Register slash commands with Discord (re-run after any command schema changes)
-node clear-global-commands.js          # Wipe globally-registered commands (fixes duplicate commands from old deployments)
-npm test                               # Run unit tests (Jest)
+npx tsx deploy-commands.ts             # Register slash commands with Discord (re-run after any command schema changes)
+npx tsx clear-global-commands.ts       # Wipe globally-registered commands (fixes duplicate commands from old deployments)
+npm test                               # Run unit tests (Jest via ts-jest)
+npm run typecheck                      # Type-check the whole project without emitting (tsc --noEmit)
 npx prisma studio                      # Browse the database in a web UI
 npx prisma db push --accept-data-loss  # Apply schema changes in dev (data loss ok)
 npx prisma migrate dev                 # Apply schema changes and create a migration (production-safe)
@@ -56,15 +58,15 @@ npx prisma generate                    # Regenerate the Prisma client after sche
 
 ## Architecture
 
-- `index.js` — Bot entry point. Loads all commands from `commands/` into a Collection at startup, then dispatches incoming interactions by command name. Wraps every command in a try/catch and replies with an ephemeral error if it throws.
-- `deploy-commands.js` — One-off script to register guild-scoped slash commands via REST. Auto-discovers all files in `commands/` so new commands are picked up automatically.
-- `clear-global-commands.js` — One-off script to wipe globally-registered slash commands. Run this if duplicate commands appear in Discord (caused by old global registrations alongside guild-scoped ones).
-- `db.js` — Exports a singleton `PrismaClient` instance. Import this wherever database access is needed.
-- `lib/scrapeBook.js` — Fetches a Goodreads book page and extracts metadata (title, author, rating, pages, image, genres) from the JSON-LD script tag and HTML. HTML entities in titles/authors are decoded via cheerio.
-- `lib/buildBookEmbed.js` — Single source of truth for the book info embed. Used by `/read`, `/club-start` (member threads + epilogue), `/abandon`, and `progressPost.js`. Accepts genres as either an array (scraped data) or a JSON string (DB record).
-- `lib/progressPost.js` — Maintains the two-message `#progress` post for club books. Message 1 is the book embed; message 2 is the monospace progress bar block. Both message IDs are stored on `ClubBook` and edited in-place; if either is missing both are recreated. Deduplicates by user (most recent log per user). Called after any command that changes reading status or progress.
-- `lib/botLog.js` — Posts a timestamped (`HH:MM:SS UTC`) event to `#bot-log` (looked up by name in guild cache). Swallows errors silently so logging never breaks a command. Imported by every command.
-- `lib/resolveUsernames.js` — Merges `User` and `MemberChannel` tables to map Discord user IDs to display names. `User` table wins (more recent). Used by `/leaderboard`, `/finishers`, `/abandoners`.
+- `index.ts` — Bot entry point. Loads all commands from `commands/` into a Collection at startup, then dispatches incoming interactions by command name. Wraps every command in a try/catch and replies with an ephemeral error if it throws.
+- `deploy-commands.ts` — One-off script to register guild-scoped slash commands via REST. Auto-discovers all files in `commands/` so new commands are picked up automatically.
+- `clear-global-commands.ts` — One-off script to wipe globally-registered slash commands. Run this if duplicate commands appear in Discord (caused by old global registrations alongside guild-scoped ones).
+- `db.ts` — Exports a singleton `PrismaClient` instance. Import this wherever database access is needed.
+- `lib/scrapeBook.ts` — Fetches a Goodreads book page and extracts metadata (title, author, rating, pages, image, genres) from the JSON-LD script tag and HTML. HTML entities in titles/authors are decoded via cheerio.
+- `lib/buildBookEmbed.ts` — Single source of truth for the book info embed. Used by `/read`, `/club-start` (member threads + epilogue), `/abandon`, and `progressPost.ts`. Accepts genres as either an array (scraped data) or a JSON string (DB record).
+- `lib/progressPost.ts` — Maintains the two-message `#progress` post for club books. Message 1 is the book embed; message 2 is the monospace progress bar block. Both message IDs are stored on `ClubBook` and edited in-place; if either is missing both are recreated. Deduplicates by user (most recent log per user). Called after any command that changes reading status or progress.
+- `lib/botLog.ts` — Posts a timestamped (`HH:MM:SS UTC`) event to `#bot-log` (looked up by name in guild cache). Swallows errors silently so logging never breaks a command. Imported by every command.
+- `lib/resolveUsernames.ts` — Merges `User` and `MemberChannel` tables to map Discord user IDs to display names. `User` table wins (more recent). Used by `/leaderboard`, `/finishers`, `/abandoners`.
 
 ### Commands (`commands/`)
 
@@ -91,7 +93,7 @@ Each file exports `{ data, execute }` — `data` is a `SlashCommandBuilder` and 
 
 | Channel | Name constant | Purpose |
 |---|---|---|
-| `#progress` | `'progress'` | Two-message club read progress post. Managed by `lib/progressPost.js`. |
+| `#progress` | `'progress'` | Two-message club read progress post. Managed by `lib/progressPost.ts`. |
 | `#epilogue` | `'epilogue'` | Spoiler discussion. One thread per club book created by `/club-start`. `/progress` (at 100%) links here. `/rate` posts ratings here for club reads. |
 | `#bot-log` | `'bot-log'` | Admin-only event log. All commands post here on success. Create in Discord and restrict to admins + bot role. |
 
@@ -126,18 +128,18 @@ if (!log) {
 
 An Express 5 + EJS web panel for admins. Started with `npm run website` (port 3000 by default).
 
-**Entry point:** `website/server.js` — mounts Helmet (CSP, etc.), sessions (SQLite via `connect-sqlite3`), CSRF middleware, rate limiting on auth routes, and the three routers.
+**Entry point:** `website/server.ts` — mounts Helmet (CSP, etc.), sessions (SQLite via `connect-sqlite3`), CSRF middleware, rate limiting on auth routes, and the three routers.
 
 **Routers:**
-- `website/routes/auth.js` — Discord OAuth2 flow (`/auth/discord` → callback → session), logout
-- `website/routes/admin.js` — HTML pages: dashboard, log list (with member/status filter), create/edit/delete log
-- `website/routes/api.js` — JSON API: `/api/books/scrape` (Goodreads lookup), `/api/members`, `/api/logs`
+- `website/routes/auth.ts` — Discord OAuth2 flow (`/auth/discord` → callback → session), logout
+- `website/routes/admin.ts` — HTML pages: dashboard, log list (with member/status filter), create/edit/delete log
+- `website/routes/api.ts` — JSON API: `/api/books/scrape` (Goodreads lookup), `/api/members`, `/api/logs`
 
 **Middleware:**
-- `website/middleware/requireAdmin.js` — redirects to `/auth/login` if no session user; sets `res.locals.user`
-- `website/middleware/csrf.js` — per-session CSRF token; validates `_csrf` field on all mutating requests; skips `/auth/discord/callback`
+- `website/middleware/requireAdmin.ts` — redirects to `/auth/login` if no session user; sets `res.locals.user`
+- `website/middleware/csrf.ts` — per-session CSRF token; validates `_csrf` field on all mutating requests; skips `/auth/discord/callback`
 
-**Auth flow:** Discord OAuth2 with `identify` scope. After token exchange, `isAdmin()` in `website/lib/discord.js` checks the user's guild roles against `ADMIN_ROLE_NAMES`. Only matching roles get a session.
+**Auth flow:** Discord OAuth2 with `identify` scope. After token exchange, `isAdmin()` in `website/lib/discord.ts` checks the user's guild roles against `ADMIN_ROLE_NAMES`. Only matching roles get a session.
 
 **CSP note:** Helmet sets `script-src-attr 'none'` by default, which blocks all inline `onclick`/`onchange` attributes. All event handlers in EJS templates must be wired with `addEventListener` in `<script>` blocks — never use inline handlers.
 
@@ -145,10 +147,10 @@ An Express 5 + EJS web panel for admins. Started with `npm run website` (port 30
 
 ### Adding a new slash command
 
-1. Create `commands/<name>.js` exporting `{ data, execute }`.
-2. Run `node deploy-commands.js` to register it with Discord.
+1. Create `commands/<name>.ts` exporting `data` and `execute` (named exports).
+2. Run `npx tsx deploy-commands.ts` to register it with Discord.
 
-No changes to `index.js` or `deploy-commands.js` are needed — commands are auto-discovered.
+No changes to `index.ts` or `deploy-commands.ts` are needed — commands are auto-discovered.
 
 ## Database
 
@@ -191,17 +193,71 @@ npx prisma generate
 When deploying to a new server:
 1. Deploy code to VPS, copy `.env`.
 2. Run `npx prisma db push --accept-data-loss` to initialise the schema.
-3. Run `node deploy-commands.js` to register slash commands with the new guild.
+3. Run `npx tsx deploy-commands.ts` to register slash commands with the new guild.
 4. Admin runs `/register` for each member pointing at the new server's forum channels.
 5. Admin runs `/club-start` for the active book if one is in progress — this recreates the `#progress` post and `#epilogue` thread on the new server.
 
 Discord user IDs are global (same across servers) so all `MemberChannel.userId` and `ReadingLog.userId` values are portable. Channel and message IDs are server-specific and will be re-established through the steps above.
+
+## TypeScript
+
+The codebase is fully TypeScript (`features/typescript` branch). Key patterns:
+
+### Module exports
+- **`db.ts` and `lib/scrapeBook.ts`** use `export =` (CommonJS-compatible default export). Consumers use `import db = require('../db')` or `import scrapeBook from '../lib/scrapeBook'` (ts-jest handles the interop in tests).
+- **All other files** (commands, lib, website) use named exports: `export const data`, `export async function execute(...)`, `export function myHelper(...)`.
+
+### Discord.js type casts
+`ThreadChannel.parent` is a union that doesn't include `ForumChannel`. Cast where needed:
+```typescript
+const botTag = (channel.parent as ForumChannel | null)?.availableTags?.find(t => t.name === 'Bot');
+const currentTags = channel.appliedTags as string[] ?? [];
+```
+
+### Prisma types
+```typescript
+import type { ReadingLog, Book } from '@prisma/client';
+type LogWithBook = ReadingLog & { book: Book };  // for findUnique with include: { book: true }
+```
+
+### tsx runner
+`tsx` executes TypeScript directly without a compile step. All `npm run` scripts use it. No `dist/` directory — the source files are the runtime files.
+
+### ts-jest
+Tests run via `ts-jest` with `diagnostics: false` (skips per-file type errors during test runs). Full type checking is done separately with `npm run typecheck`.
+
+### tsconfig.json key settings
+- `"moduleDetection": "force"` — treats every file as a module even without imports/exports
+- `"moduleResolution": "node10"` — required for CommonJS `require()` interop
+- `"ignoreDeprecations": "6.0"` — suppresses node10 deprecation warning
+- `"noEmit": true` — typecheck-only; tsx handles execution directly
+
+### Error handler in index.ts
+`editReply` does not accept `MessageFlags.Ephemeral` (only `SuppressEmbeds | IsComponentsV2` are allowed). Split the error handler:
+```typescript
+if (interaction.deferred || interaction.replied) {
+  await interaction.editReply({ content: 'Something went wrong.' });
+} else {
+  await interaction.reply({ content: 'Something went wrong.', flags: MessageFlags.Ephemeral });
+}
+```
+
+### Thread tags (progress/abandon)
+When a book is finished or abandoned, apply the matching forum tag if it exists on the parent channel. Silently swallow permissions errors:
+```typescript
+const completedTag = (channel.parent as ForumChannel | null)?.availableTags?.find(t => t.name === 'Completed');
+if (completedTag) {
+  const currentTags = channel.appliedTags as string[] ?? [];
+  await channel.setAppliedTags([...new Set([...currentTags, completedTag.id])]).catch(() => null);
+}
+```
+Same pattern for "Abandoned" tag in `commands/abandon.ts`. Tags are optional — the command succeeds regardless.
 
 ## Notes
 
 - All ephemeral replies use `flags: MessageFlags.Ephemeral` (not the deprecated `ephemeral: true`).
 - Discord user IDs are stored as `String` — snowflakes exceed JS integer range.
 - Prisma 7 was tried and reverted — it requires driver adapters for SQLite and is incompatible with this plain CommonJS setup. Stay on Prisma 5.
-- Jest is configured (`"testMatch": ["**/tests/**/*.test.js"]`) to ignore `commands/test.js`.
+- Jest is configured (`"testMatch": ["**/tests/**/*.test.ts"]`) to pick up TypeScript test files; `commands/test.ts` is excluded by the pattern.
 - `npx prisma migrate dev` may fail non-interactively — use `npx prisma db push --accept-data-loss` in dev instead.
-- `lib/scrapeBook.js` decodes HTML entities via `$('<textarea>').html(str).text()` (cheerio is already a dependency). Goodreads JSON-LD sometimes HTML-encodes strings like apostrophes.
+- `lib/scrapeBook.ts` decodes HTML entities via `$('<textarea>').html(str).text()` (cheerio is already a dependency). Goodreads JSON-LD sometimes HTML-encodes strings like apostrophes.

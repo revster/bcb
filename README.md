@@ -125,7 +125,7 @@ npm run seed-quips   # Populate the default reminder quip library
 ### Register slash commands
 
 ```bash
-node deploy-commands.js
+npx tsx deploy-commands.ts   # Register guild-scoped commands with Discord
 ```
 
 ### Run
@@ -133,6 +133,7 @@ node deploy-commands.js
 ```bash
 npm run bot        # Start the Discord bot
 npm run website    # Start the admin web panel (http://localhost:3000)
+npm run typecheck  # Type-check the whole project
 ```
 
 Both can run independently or together.
@@ -153,7 +154,7 @@ Each registered member also needs a **Forum channel** that the bot will create t
 
 1. Deploy code, copy `.env` with new `GUILD_ID` and production `DISCORD_REDIRECT_URI`
 2. `npx prisma db push --accept-data-loss` — initialise schema
-3. `node deploy-commands.js` — register commands with the new guild
+3. `npx tsx deploy-commands.ts` — register commands with the new guild
 4. Admin runs `/register` for each member pointing at the new server's forum channels
 5. Admin runs `/club-start` for the active book if one is in progress
 
@@ -163,15 +164,17 @@ Discord user IDs are global, so all reading history is portable across servers.
 
 ```bash
 npm test                               # Run unit tests
+npm run typecheck                      # Type-check without emitting
 npx prisma studio                      # Browse the database
-node clear-global-commands.js          # Wipe globally-registered commands (fixes duplicates)
+npx tsx clear-global-commands.ts       # Wipe globally-registered commands (fixes duplicates)
 ```
 
 ## Tech stack
 
+- [TypeScript](https://www.typescriptlang.org/) — full codebase; executed directly via [tsx](https://github.com/privatenumber/tsx) (no compile step)
 - [discord.js](https://discord.js.org/) v14
 - [Prisma](https://www.prisma.io/) 5 + SQLite
 - [cheerio](https://cheerio.js.org/) for Goodreads scraping
-- [Jest](https://jestjs.io/) for unit tests
+- [Jest](https://jestjs.io/) + [ts-jest](https://kulshekhar.github.io/ts-jest/) for unit tests
 - [Express](https://expressjs.com/) v5 + EJS for the admin web panel
 - [Helmet](https://helmetjs.github.io/) + CSRF middleware for web security
