@@ -11,6 +11,7 @@
 
 import type { Client } from 'discord.js';
 import db = require('../db');
+import { botLog } from './botLog';
 
 export async function sendReminders(client: Client): Promise<void> {
   const setting = await db.setting.findUnique({ where: { key: 'reminders_enabled' } });
@@ -73,7 +74,8 @@ export async function sendReminders(client: Client): Promise<void> {
         data:  { lastRemindedAt: now },
       });
     } catch (err) {
-      console.error(`[reminders] Failed to remind user ${log.userId}:`, err);
+      const guild = client.guilds.cache.first();
+      if (guild) await botLog(guild, `[reminders] failed to remind user ${log.userId}: ${(err as Error)?.message ?? String(err)}`);
     }
   }
 }

@@ -5,6 +5,7 @@ import * as path from 'path';
 import cron = require('node-cron');
 import db = require('./db');
 import { sendReminders } from './lib/reminders';
+import { botLog } from './lib/botLog';
 
 interface Command {
   data: { name: string; toJSON(): unknown };
@@ -36,7 +37,10 @@ client.once('clientReady', () => {
 
   // Daily at 9:00 AM UTC — ping readers who haven't logged progress in 7 days
   cron.schedule('0 9 * * *', () => {
-    sendReminders(client).catch((err: unknown) => console.error('[reminders] Cron error:', err));
+    sendReminders(client).catch((err: unknown) => {
+      const guild = client.guilds.cache.first();
+      if (guild) botLog(guild, `[reminders] Cron error: ${(err as Error)?.message ?? String(err)}`);
+    });
   });
 });
 
@@ -56,7 +60,8 @@ client.on('interactionCreate', async (interaction) => {
   try {
     await command.execute(interaction);
   } catch (err) {
-    console.error(err);
+    const msg = (err as Error)?.message ?? String(err);
+    if (interaction.guild) botLog(interaction.guild, `[error] /${interaction.commandName} by ${interaction.user.username}: ${msg}`);
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply({ content: 'Something went wrong.' });
     } else {

@@ -13,6 +13,7 @@
 import type { Guild, TextChannel } from 'discord.js';
 import db = require('../db');
 import { buildBookEmbed } from './buildBookEmbed';
+import { botLog } from './botLog';
 
 const PROGRESS_CHANNEL_NAME = 'progress';
 const BAR_LENGTH = 20;
@@ -38,7 +39,7 @@ export async function updateProgressPost(bookId: number, guild: Guild): Promise<
     orderBy: { startedAt: 'asc' },
   });
   if (allLogs.length === 0) {
-    console.log(`[progressPost] no reading logs for bookId ${bookId} — skipping`);
+    await botLog(guild, `[progressPost] no reading logs for club bookId ${bookId}`);
     return;
   }
 
@@ -80,7 +81,7 @@ export async function updateProgressPost(bookId: number, guild: Guild): Promise<
   const allChannels = await guild.channels.fetch();
   const progressChannel = allChannels.find(c => c?.name === PROGRESS_CHANNEL_NAME) as TextChannel | undefined;
   if (!progressChannel) {
-    console.log(`[progressPost] no channel named "${PROGRESS_CHANNEL_NAME}" found in guild — skipping`);
+    await botLog(guild, `[progressPost] no channel named "${PROGRESS_CHANNEL_NAME}" found — create it to enable the progress board`);
     return;
   }
 

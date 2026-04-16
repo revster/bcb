@@ -148,7 +148,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   if (epilogueUrl) lines.push(`Epilogue thread: ${epilogueUrl}`);
   if (failures.length) {
     for (const { r, mc } of failures) {
-      console.error(`club-start: failed for ${mc.username} (channel ${mc.channelId}):`, r.reason);
+      await botLog(interaction.guild!, `[club-start] failed for ${mc.username} (channel ${mc.channelId}): ${(r.reason as Error)?.message ?? String(r.reason)}`);
       lines.push(`⚠️ Failed for **${mc.username}**: ${(r.reason as Error)?.message ?? String(r.reason)}`);
     }
   }

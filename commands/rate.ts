@@ -80,7 +80,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       const epilogueThread = await interaction.guild!.channels.fetch(clubBook.epilogueThreadId) as TextChannel;
       await epilogueThread.send(`${interaction.user.username} rated **${log.book.title}**: ${starDisplay} (${rating})`);
     } catch (err) {
-      console.error('[rate] failed to post rating in epilogue thread:', err);
+      await botLog(interaction.guild!, `[rate] failed to post in epilogue thread: ${(err as Error)?.message ?? String(err)}`);
     }
   }
 }
