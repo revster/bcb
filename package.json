@@ -5,7 +5,8 @@
   "scripts": {
     "test": "jest",
     "bot": "node index.js",
-    "website": "node website/server.js"
+    "website": "node website/server.js",
+    "seed-quips": "node scripts/seed-quips.js"
   },
   "jest": {
     "testMatch": [
@@ -35,6 +36,7 @@
     "express-rate-limit": "^8.3.2",
     "express-session": "^1.19.0",
     "helmet": "^8.1.0",
+    "node-cron": "^4.2.1",
     "prisma": "^5.22.0"
   },
   "devDependencies": {
