@@ -36,6 +36,8 @@ function stubMembers() {
   db.memberChannel.findMany.mockResolvedValue([]);
 }
 
+beforeAll(() => jest.spyOn(console, 'error').mockImplementation(() => {}));
+afterAll(() => console.error.mockRestore());
 afterEach(() => jest.resetAllMocks());
 
 // ── GET / (dashboard) ─────────────────────────────────────────────────────────
