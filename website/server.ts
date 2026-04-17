@@ -20,10 +20,11 @@ const PORT = process.env.PORT || 3000;
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'"],
-      styleSrc:   ["'self'", "'unsafe-inline'"],
-      scriptSrc:  ["'self'", "'unsafe-inline'"],
-      imgSrc:     ["'self'", 'https:', 'data:'],
+      defaultSrc:             ["'self'"],
+      styleSrc:               ["'self'", "'unsafe-inline'"],
+      scriptSrc:              ["'self'", "'unsafe-inline'"],
+      imgSrc:                 ["'self'", 'https:', 'data:'],
+      upgradeInsecureRequests: null,
     },
   },
 }));
