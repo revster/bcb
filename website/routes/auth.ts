@@ -38,15 +38,14 @@ router.get('/discord', (req: SessionReq, res: Response) => {
     state,
   });
 
-  req.session.save((err: any) => {
-    console.log('[auth] session saved, id:', req.session.id, 'err:', err, 'secure:', (req as any).secure, 'proto:', req.headers['x-forwarded-proto']);
+  req.session.save(() => {
     res.redirect(`${DISCORD_AUTH_URL}?${params}`);
   });
 });
 
 router.get('/discord/callback', async (req: SessionReq, res: Response) => {
   const { code, state, error } = req.query;
-  console.log('[auth] callback, session id:', req.session.id, 'oauthState:', req.session.oauthState, 'state param:', state);
+
 
   if (error) return res.redirect('/auth/login?error=cancelled');
 
