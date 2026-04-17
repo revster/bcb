@@ -656,6 +656,79 @@ describe('/stats execute', () => {
       expect(field.value).toContain('1** month');
       expect(field.value).not.toContain('1** months');
     });
+
+    test('two books in same month: finishing one is enough to keep streak', async () => {
+      mockFindMany.mockResolvedValue([
+        makeLog(1, 'finished'),
+        makeLog(2, 'abandoned'),
+      ]);
+      mockAll.mockReturnValue([
+        makeClubBook(1, { month: 1, year: 2025 }),
+        makeClubBook(2, { month: 1, year: 2025 }),
+      ]);
+      const interaction = makeInteraction();
+      await execute(interaction);
+
+      const field = getField(getEmbed(interaction), '🏆 Book of the Month — All Time');
+      expect(field.value).toContain('streak');
+      expect(field.value).toContain('1** month');
+    });
+
+    test('two books in same month: finishing both still counts as 1 month', async () => {
+      mockFindMany.mockResolvedValue([
+        makeLog(1, 'finished'),
+        makeLog(2, 'finished'),
+      ]);
+      mockAll.mockReturnValue([
+        makeClubBook(1, { month: 1, year: 2025 }),
+        makeClubBook(2, { month: 1, year: 2025 }),
+      ]);
+      const interaction = makeInteraction();
+      await execute(interaction);
+
+      const field = getField(getEmbed(interaction), '🏆 Book of the Month — All Time');
+      expect(field.value).toContain('1** month');
+    });
+
+    test('two books in same month: finishing neither resets streak', async () => {
+      mockFindMany.mockResolvedValue([
+        makeLog(1, 'finished'),  // Jan 2025
+        makeLog(2, 'abandoned'), // Feb 2025 — book A
+        makeLog(3, 'abandoned'), // Feb 2025 — book B
+        makeLog(4, 'finished'),  // Mar 2025
+      ]);
+      mockAll.mockReturnValue([
+        makeClubBook(1, { month: 1, year: 2025 }),
+        makeClubBook(2, { month: 2, year: 2025 }),
+        makeClubBook(3, { month: 2, year: 2025 }),
+        makeClubBook(4, { month: 3, year: 2025 }),
+      ]);
+      const interaction = makeInteraction();
+      await execute(interaction);
+
+      const field = getField(getEmbed(interaction), '🏆 Book of the Month — All Time');
+      // Best streak is 1 (Jan or Mar individually, Feb broke it)
+      expect(field.value).toContain('1** month');
+    });
+
+    test('two books in same month: reading one in last month does not break streak', async () => {
+      mockFindMany.mockResolvedValue([
+        makeLog(1, 'finished'),
+        makeLog(2, 'reading'),
+        makeLog(3, 'abandoned'),
+      ]);
+      mockAll.mockReturnValue([
+        makeClubBook(1, { month: 1, year: 2025 }),
+        makeClubBook(2, { month: 2, year: 2025 }),
+        makeClubBook(3, { month: 2, year: 2025 }),
+      ]);
+      const interaction = makeInteraction();
+      await execute(interaction);
+
+      const field = getField(getEmbed(interaction), '🏆 Book of the Month — All Time');
+      // Jan finished (streak=1), Feb has one reading so don't break
+      expect(field.value).toContain('streak');
+    });
   });
 
 // ── Non-BOTM club reads ───────────────────────────────────────────────────────

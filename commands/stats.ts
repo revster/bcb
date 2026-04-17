@@ -82,21 +82,44 @@ function computeLongestStreak(
   statusByBookId: Map<number, string>,
 ): number {
   const eligible = clubBooksOrdered.filter(cb => cb.month !== null && cb.year !== null);
-  const firstIdx = eligible.findIndex(cb => statusByBookId.has(cb.bookId));
+
+  // Group books by month/year so multiple books in the same month count as one streak unit.
+  // Finishing any one book in a month is enough to keep the streak alive.
+  const monthMap = new Map<string, number[]>();
+  for (const cb of eligible) {
+    const key = `${cb.year}-${cb.month}`;
+    if (!monthMap.has(key)) monthMap.set(key, []);
+    monthMap.get(key)!.push(cb.bookId);
+  }
+
+  const sortedMonths = [...monthMap.entries()].sort(([a], [b]) => {
+    const [ay, am] = a.split('-').map(Number);
+    const [by, bm] = b.split('-').map(Number);
+    return ay !== by ? ay - by : am - bm;
+  });
+
+  // Start streak from the first month where the user has any log
+  const firstIdx = sortedMonths.findIndex(([, bookIds]) =>
+    bookIds.some(id => statusByBookId.has(id))
+  );
   if (firstIdx === -1) return 0;
 
   let best = 0;
   let current = 0;
 
-  for (let i = firstIdx; i < eligible.length; i++) {
-    const status = statusByBookId.get(eligible[i].bookId);
-    const isLast = i === eligible.length - 1;
+  for (let i = firstIdx; i < sortedMonths.length; i++) {
+    const [, bookIds] = sortedMonths[i];
+    const isLast = i === sortedMonths.length - 1;
+    const statuses = bookIds.map(id => statusByBookId.get(id));
 
-    if (status === 'finished') {
+    const hasFinished = statuses.some(s => s === 'finished');
+    const hasReading  = statuses.some(s => s === 'reading');
+
+    if (hasFinished) {
       current++;
       if (current > best) best = current;
-    } else if (status === 'reading' && isLast) {
-      // Current month still in progress — don't break streak
+    } else if (hasReading && isLast) {
+      // At least one book still in progress this month — don't break streak
     } else {
       current = 0;
     }
