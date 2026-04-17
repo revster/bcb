@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { REST, Routes } from 'discord.js';
 
-const ADMIN_COMMANDS = ['register', 'unregister'];
+const ADMIN_COMMANDS = ['register', 'unregister', 'checkup'];
 
 const commands = ADMIN_COMMANDS.map(name => require(`./commands/${name}`).data.toJSON());
 
