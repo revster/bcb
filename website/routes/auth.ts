@@ -38,7 +38,9 @@ router.get('/discord', (req: SessionReq, res: Response) => {
     state,
   });
 
-  res.redirect(`${DISCORD_AUTH_URL}?${params}`);
+  req.session.save(() => {
+    res.redirect(`${DISCORD_AUTH_URL}?${params}`);
+  });
 });
 
 router.get('/discord/callback', async (req: SessionReq, res: Response) => {
