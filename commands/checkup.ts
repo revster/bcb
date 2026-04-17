@@ -5,6 +5,8 @@
  *   1. Their forum channel still exists in the guild
  *   2. The channel has a "Bot" tag
  *   3. The channel has a "Book of the Month" tag
+ *   4. The channel has a "Completed" tag
+ *   5. The channel has an "Abandoned" tag
  *
  * Replies ephemerally with a summary. Members are never tagged.
  */
@@ -13,7 +15,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, Permiss
 import db = require('../db');
 import { memberChannels } from '../schema';
 
-const REQUIRED_TAGS = ['Bot', 'Book of the Month'];
+const REQUIRED_TAGS = ['Bot', 'Book of the Month', 'Completed', 'Abandoned'];
 
 export const data = new SlashCommandBuilder()
   .setName('checkup')

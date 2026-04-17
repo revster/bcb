@@ -53,7 +53,7 @@ describe('/checkup execute', () => {
 
   test('reports healthy when all members have valid channels with required tags', async () => {
     mockAll.mockReturnValue([MEMBER_A, MEMBER_B]);
-    const fullChannel = makeForumChannel(['Bot', 'Book of the Month']);
+    const fullChannel = makeForumChannel(['Bot', 'Book of the Month', 'Completed', 'Abandoned']);
     const interaction = makeInteraction(() => Promise.resolve(fullChannel));
     await execute(interaction);
     const reply = getReplied(interaction);
@@ -72,7 +72,7 @@ describe('/checkup execute', () => {
 
   test('reports missing Bot tag', async () => {
     mockAll.mockReturnValue([MEMBER_A]);
-    const channel = makeForumChannel(['Book of the Month']);
+    const channel = makeForumChannel(['Book of the Month', 'Completed', 'Abandoned']);
     const interaction = makeInteraction(() => Promise.resolve(channel));
     await execute(interaction);
     const reply = getReplied(interaction);
@@ -82,7 +82,7 @@ describe('/checkup execute', () => {
 
   test('reports missing Book of the Month tag', async () => {
     mockAll.mockReturnValue([MEMBER_A]);
-    const channel = makeForumChannel(['Bot']);
+    const channel = makeForumChannel(['Bot', 'Completed', 'Abandoned']);
     const interaction = makeInteraction(() => Promise.resolve(channel));
     await execute(interaction);
     const reply = getReplied(interaction);
@@ -90,7 +90,27 @@ describe('/checkup execute', () => {
     expect(reply).toContain('Book of the Month');
   });
 
-  test('reports both missing tags when channel has no tags', async () => {
+  test('reports missing Completed tag', async () => {
+    mockAll.mockReturnValue([MEMBER_A]);
+    const channel = makeForumChannel(['Bot', 'Book of the Month', 'Abandoned']);
+    const interaction = makeInteraction(() => Promise.resolve(channel));
+    await execute(interaction);
+    const reply = getReplied(interaction);
+    expect(reply).toContain('alice');
+    expect(reply).toContain('Completed');
+  });
+
+  test('reports missing Abandoned tag', async () => {
+    mockAll.mockReturnValue([MEMBER_A]);
+    const channel = makeForumChannel(['Bot', 'Book of the Month', 'Completed']);
+    const interaction = makeInteraction(() => Promise.resolve(channel));
+    await execute(interaction);
+    const reply = getReplied(interaction);
+    expect(reply).toContain('alice');
+    expect(reply).toContain('Abandoned');
+  });
+
+  test('reports all missing tags when channel has no tags', async () => {
     mockAll.mockReturnValue([MEMBER_A]);
     const channel = makeForumChannel([]);
     const interaction = makeInteraction(() => Promise.resolve(channel));
@@ -98,12 +118,14 @@ describe('/checkup execute', () => {
     const reply = getReplied(interaction);
     expect(reply).toContain('Bot');
     expect(reply).toContain('Book of the Month');
+    expect(reply).toContain('Completed');
+    expect(reply).toContain('Abandoned');
   });
 
   test('reports issues count in header', async () => {
     mockAll.mockReturnValue([MEMBER_A, MEMBER_B]);
     // alice is fine, bob's channel is missing
-    const fullChannel = makeForumChannel(['Bot', 'Book of the Month']);
+    const fullChannel = makeForumChannel(['Bot', 'Book of the Month', 'Completed', 'Abandoned']);
     const interaction = makeInteraction((id: string) =>
       id === 'ch-alice' ? Promise.resolve(fullChannel) : Promise.resolve(null)
     );
