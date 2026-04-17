@@ -10,6 +10,9 @@ node_modules/
 # Generated Prisma client
 /generated/prisma
 
+# Local deployment notes (not for remote)
+deployment.md
+
 # SQLite database and sidecar files
 *.db
 *.db-journal
