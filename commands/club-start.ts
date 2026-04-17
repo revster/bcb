@@ -22,7 +22,8 @@ import { updateProgressPost } from '../lib/progressPost';
 import { botLog } from '../lib/botLog';
 
 const GOODREADS_BOOK_RE = /^https:\/\/(www\.)?goodreads\.com\/book\/show\//;
-const CLUB_TAG_NAMES = ['Bot', 'Book of the Month'];
+const BOT_TAG_NAME = 'Bot';
+const BOTM_TAG_NAME = 'Book of the Month';
 const EPILOGUE_CHANNEL_NAME = 'epilogue';
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -47,6 +48,14 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const url = interaction.options.getString('url', true);
   const month = interaction.options.getInteger('month');
   const year = interaction.options.getInteger('year');
+
+  if ((month === null) !== (year === null)) {
+    await interaction.reply({
+      content: 'Please provide both `month` and `year`, or neither.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
 
   if (!GOODREADS_BOOK_RE.test(url)) {
     await interaction.reply({
@@ -85,7 +94,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     .values({ bookId: book.id, month, year })
     .onConflictDoUpdate({
       target: clubBooks.bookId,
-      set: { ...(month !== null && { month }), ...(year !== null && { year }) },
+      set: { month, year },
     })
     .returning()
     .get()!;
@@ -93,16 +102,28 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   // Create a thread in every registered member's forum channel
   const allMemberChannels = db.select().from(memberChannels).all();
   const embed = buildBookEmbed(book, `Started reading on ${new Date().toDateString()}`);
+  const threadTagNames = month && year
+    ? [BOT_TAG_NAME, BOTM_TAG_NAME]
+    : [BOT_TAG_NAME];
 
   const results = await Promise.allSettled(
     allMemberChannels.map(async mc => {
       const forumChannel = await interaction.guild!.channels.fetch(mc.channelId) as ForumChannel;
 
       // Collect tag IDs for any matching tag names that exist on this channel
-      const appliedTags = CLUB_TAG_NAMES
+      const appliedTags = threadTagNames
         .map(name => forumChannel.availableTags?.find(t => t.name === name))
         .filter((t): t is NonNullable<typeof t> => t != null)
         .map(t => t.id);
+
+      const missingTags = threadTagNames.filter(
+        name => !forumChannel.availableTags?.some(t => t.name === name)
+      );
+      if (missingTags.length > 0) {
+        await botLog(interaction.guild!,
+          `[club-start] <@${interaction.user.id}> — <#${mc.channelId}> (${mc.username}) is missing tags: ${missingTags.join(', ')}. Commands like /progress will not work in the created thread until the tags are added.`
+        );
+      }
 
       const thread = await forumChannel.threads.create({
         name: `${book!.title} by ${book!.author}`,
@@ -119,9 +140,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   // Create the epilogue discussion thread if it doesn't already exist
   let epilogueUrl: string | null = null;
   if (!clubBook.epilogueThreadId) {
-    const epilogueChannel = interaction.guild!.channels.cache.find(c => c.name === EPILOGUE_CHANNEL_NAME) as ForumChannel | undefined;
+    const allChannels = await interaction.guild!.channels.fetch();
+    const epilogueChannel = allChannels.find(c => c?.name === EPILOGUE_CHANNEL_NAME) as ForumChannel | undefined;
     if (epilogueChannel) {
-      const epilogueTagIds = CLUB_TAG_NAMES
+      const epilogueTagIds = threadTagNames
         .map(name => epilogueChannel.availableTags?.find(t => t.name === name))
         .filter((t): t is NonNullable<typeof t> => t != null)
         .map(t => t.id);
@@ -146,7 +168,10 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     .filter(({ r }) => r.status === 'rejected') as Array<{ r: PromiseRejectedResult; mc: typeof allMemberChannels[number] }>;
 
   const monthYearStr = (month && year) ? ` (${MONTHS[month - 1]} ${year})` : '';
-  const lines = [`**${book.title}**${monthYearStr} is now the active club read.`];
+  const statusStr = (month && year)
+    ? 'is now the active Book of the Month.'
+    : 'is now an active club read (no BOTM month assigned — will not appear in BOTM stats).';
+  const lines = [`**${book.title}**${monthYearStr} ${statusStr}`];
   if (created.length) lines.push(`Threads created for: ${created.join(', ')}`);
   if (epilogueUrl) lines.push(`Epilogue thread: ${epilogueUrl}`);
   if (failures.length) {

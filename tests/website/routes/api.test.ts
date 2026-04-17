@@ -43,6 +43,9 @@ afterEach(() => jest.clearAllMocks());
 
 // ── GET /api/books/scrape ──────────────────────────────────────────────────────
 
+const VALID_URL = 'https://www.goodreads.com/book/show/44767458-dune';
+const VALID_URL_2 = 'https://www.goodreads.com/book/show/12345.New_Book';
+
 describe('GET /api/books/scrape', () => {
   test('returns 400 when url param is missing', async () => {
     const res = await request(makeApp()).get('/api/books/scrape');
@@ -50,9 +53,15 @@ describe('GET /api/books/scrape', () => {
     expect(res.body.error).toBeDefined();
   });
 
+  test('returns 400 for a non-Goodreads URL', async () => {
+    const res = await request(makeApp()).get('/api/books/scrape?url=https://amazon.com/book/123');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeDefined();
+  });
+
   test('returns existing book from db with fromDb: true', async () => {
-    mockGet.mockReturnValueOnce({ id: 1, title: 'Dune', author: 'Frank Herbert', goodreadsUrl: 'http://gr.com/1' });
-    const res = await request(makeApp()).get('/api/books/scrape?url=http://gr.com/1');
+    mockGet.mockReturnValueOnce({ id: 1, title: 'Dune', author: 'Frank Herbert', goodreadsUrl: VALID_URL });
+    const res = await request(makeApp()).get(`/api/books/scrape?url=${encodeURIComponent(VALID_URL)}`);
     expect(res.status).toBe(200);
     expect(res.body.fromDb).toBe(true);
     expect(res.body.title).toBe('Dune');
@@ -62,7 +71,7 @@ describe('GET /api/books/scrape', () => {
   test('scrapes and returns book when not in db', async () => {
     mockGet.mockReturnValueOnce(undefined); // not in db
     jest.mocked(scrapeBook).mockResolvedValue({ title: 'New Book', author: 'Author', pages: 300, genres: [] as string[], rating: null, image: null });
-    const res = await request(makeApp()).get('/api/books/scrape?url=http://gr.com/2');
+    const res = await request(makeApp()).get(`/api/books/scrape?url=${encodeURIComponent(VALID_URL_2)}`);
     expect(res.status).toBe(200);
     expect(res.body.fromDb).toBe(false);
     expect(res.body.title).toBe('New Book');
@@ -71,7 +80,7 @@ describe('GET /api/books/scrape', () => {
   test('returns 422 when scraping fails', async () => {
     mockGet.mockReturnValueOnce(undefined); // not in db
     jest.mocked(scrapeBook).mockRejectedValue(new Error('Goodreads returned 404'));
-    const res = await request(makeApp()).get('/api/books/scrape?url=http://gr.com/bad');
+    const res = await request(makeApp()).get(`/api/books/scrape?url=${encodeURIComponent(VALID_URL)}`);
     expect(res.status).toBe(422);
     expect(res.body.error).toBe('Goodreads returned 404');
   });

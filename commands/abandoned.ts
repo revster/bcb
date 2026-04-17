@@ -52,6 +52,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   const clubBookRows = await db.query.clubBooks.findMany({
     with: { book: true },
+    where: (cb, { isNotNull, and }) => and(isNotNull(cb.month), isNotNull(cb.year)),
     orderBy: (cb, { asc }) => [asc(cb.createdAt)],
   });
 

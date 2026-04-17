@@ -83,6 +83,13 @@ app.use((req: any, res: any) => {
   res.status(404).render('error', { title: 'Not Found', message: 'Page not found.' });
 });
 
+// ── 500 ───────────────────────────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error(err);
+  res.status(500).render('error', { title: 'Server Error', message: 'Something went wrong.' });
+});
+
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`Web server running at http://localhost:${PORT}`);

@@ -4,21 +4,30 @@
  * Personal reading summary. Defaults to the caller; pass a user to look up
  * someone else.
  *
- * Two sections:
- *   All Reads — finished/reading/abandoned counts, total pages, avg rating,
- *               favourite genre (across all personal and club reads)
- *   Book of the Month — finished/abandoned counts, completion rate
- *                       (finished ÷ enrolled), avg rating for club reads only.
- *                       Omitted entirely if the user has no club read logs.
- *
- * Re-reads are counted as separate entries.
+ * Sections:
+ *   Currently Reading — mini progress bars for in-progress books
+ *   This Year / All Time — finished/reading/abandoned counts side by side
+ *   All-time extras — pages, avg rating, favourite genre, longest book
+ *   Book of the Month — This Year and All Time subsections with streak
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
-import { eq } from 'drizzle-orm';
+import { asc } from 'drizzle-orm';
 import db = require('../db');
 import { readingLogs, clubBooks } from '../schema';
 import type { LogWithBook } from '../schema';
+
+const BAR_LENGTH = 15;
+const TITLE_MAX = 25;
+
+function buildBar(pct: number): string {
+  const filled = Math.round((Math.min(pct, 100) / 100) * BAR_LENGTH);
+  return '█'.repeat(filled) + '░'.repeat(BAR_LENGTH - filled);
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max - 1) + '…' : s;
+}
 
 function favouriteGenre(books: Array<{ genres: string | null }>): string | null {
   const counts: Record<string, number> = {};
@@ -61,45 +70,132 @@ function deduplicateByBook(logs: LogWithBook[]): LogWithBook[] {
   }));
 }
 
+/**
+ * Computes the longest ever streak of consecutive BOTM completions.
+ * Only counts club books that have both month and year set.
+ * Streak begins from the user's first enrolled BOTM book (joining late is fine).
+ * An enrolled-but-unfinished month resets the streak.
+ * The last entry being in-progress (reading) does not break the streak.
+ */
+function computeLongestStreak(
+  clubBooksOrdered: Array<{ bookId: number; month: number | null; year: number | null }>,
+  statusByBookId: Map<number, string>,
+): number {
+  const eligible = clubBooksOrdered.filter(cb => cb.month !== null && cb.year !== null);
+  const firstIdx = eligible.findIndex(cb => statusByBookId.has(cb.bookId));
+  if (firstIdx === -1) return 0;
+
+  let best = 0;
+  let current = 0;
+
+  for (let i = firstIdx; i < eligible.length; i++) {
+    const status = statusByBookId.get(eligible[i].bookId);
+    const isLast = i === eligible.length - 1;
+
+    if (status === 'finished') {
+      current++;
+      if (current > best) best = current;
+    } else if (status === 'reading' && isLast) {
+      // Current month still in progress — don't break streak
+    } else {
+      current = 0;
+    }
+  }
+
+  return best;
+}
+
 async function buildStatsEmbed(userId: string, displayName: string): Promise<EmbedBuilder | null> {
+  const currentYear = new Date().getFullYear();
+
   const logs = (await db.query.readingLogs.findMany({
     where: (rl, { eq }) => eq(rl.userId, userId),
     with: { book: true },
     orderBy: (rl, { asc }) => [asc(rl.startedAt)],
   })) as LogWithBook[];
-  const clubBookRows = db.select({ bookId: clubBooks.bookId }).from(clubBooks).all();
+
+  const clubBookRows = db.select({ bookId: clubBooks.bookId, month: clubBooks.month, year: clubBooks.year })
+    .from(clubBooks)
+    .orderBy(asc(clubBooks.year), asc(clubBooks.month))
+    .all();
 
   if (!logs.length) return null;
 
-  const clubBookIds = new Set(clubBookRows.map(cb => cb.bookId));
+  const botmBookIds = new Set(
+    clubBookRows.filter(cb => cb.month !== null && cb.year !== null).map(cb => cb.bookId)
+  );
+  const clubBookYearMap = new Map(clubBookRows.map(cb => [cb.bookId, cb.year]));
 
-  // Deduplicate by book so re-run club-start threads don't inflate counts
   const uniqueLogs     = deduplicateByBook(logs);
-  const clubUniqueLogs = uniqueLogs.filter(l => clubBookIds.has(l.bookId));
+  const clubUniqueLogs = uniqueLogs.filter(l => botmBookIds.has(l.bookId));
+  const clubLogsThisYear = clubUniqueLogs.filter(l => clubBookYearMap.get(l.bookId) === currentYear);
 
+  // ── All Reads ──────────────────────────────────────────────────────────────
   const allFinished  = uniqueLogs.filter(l => l.status === 'finished');
   const allReading   = uniqueLogs.filter(l => l.status === 'reading');
   const allAbandoned = uniqueLogs.filter(l => l.status === 'abandoned');
 
-  const clubFinished  = clubUniqueLogs.filter(l => l.status === 'finished');
-  const clubAbandoned = clubUniqueLogs.filter(l => l.status === 'abandoned');
+  const thisYearLogs      = uniqueLogs.filter(l => l.startedAt.getFullYear() === currentYear);
+  const thisYearFinished  = thisYearLogs.filter(l => l.status === 'finished');
+  const thisYearReading   = thisYearLogs.filter(l => l.status === 'reading');
+  const thisYearAbandoned = thisYearLogs.filter(l => l.status === 'abandoned');
 
+  // ── BOTM ──────────────────────────────────────────────────────────────────
+  const clubFinished          = clubUniqueLogs.filter(l => l.status === 'finished');
+  const clubAbandoned         = clubUniqueLogs.filter(l => l.status === 'abandoned');
+  const clubFinishedThisYear  = clubLogsThisYear.filter(l => l.status === 'finished');
+  const clubAbandonedThisYear = clubLogsThisYear.filter(l => l.status === 'abandoned');
+
+  // ── Extra stats ───────────────────────────────────────────────────────────
   const totalPages = allFinished.reduce((sum, l) => sum + (l.book.pages ?? 0), 0);
-  const genre      = favouriteGenre(allFinished.map(l => l.book));
-  const allAvgRating  = avgRatingStr(logs);
-  const clubAvgRating = avgRatingStr(logs.filter(l => clubBookIds.has(l.bookId)));
+  const longestBook = allFinished
+    .filter(l => l.book.pages !== null)
+    .sort((a, b) => (b.book.pages ?? 0) - (a.book.pages ?? 0))[0] ?? null;
+  const genre             = favouriteGenre(allFinished.map(l => l.book));
+  const allAvgRating      = avgRatingStr(logs);
+  const clubAvgRating     = avgRatingStr(clubUniqueLogs);
+  const clubAvgThisYear   = avgRatingStr(clubLogsThisYear);
 
+  const statusByBotmBookId = new Map(clubUniqueLogs.map(l => [l.bookId, l.status]));
+  const longestStreak      = computeLongestStreak(clubBookRows, statusByBotmBookId);
+
+  // ── Build embed ───────────────────────────────────────────────────────────
   const embed = new EmbedBuilder()
     .setTitle(`📚 ${displayName}'s Reading Stats`);
 
-  // ── All Reads ──────────────────────────────────────────────────────────────
-  const allCounts = [
+  // Currently reading
+  if (allReading.length > 0) {
+    const displayTitles = allReading.map(l => truncate(l.book.title, TITLE_MAX));
+    const maxLen = Math.max(...displayTitles.map(t => t.length));
+    const barLines = allReading.map((l, i) => {
+      const pct = l.progress ?? 0;
+      const bar = buildBar(pct);
+      const pctStr = pct.toFixed(0).padStart(3) + '%';
+      return `${displayTitles[i].padEnd(maxLen)}  ${bar}  ${pctStr}`;
+    });
+    embed.addFields({ name: '📖 Currently Reading', value: '```\n' + barLines.join('\n') + '\n```' });
+  }
+
+  // This Year / All Time counts
+  const allTimeCounts = [
     `✅ Finished: **${allFinished.length}**`,
     `📖 Reading:  **${allReading.length}**`,
     `✗  Abandoned: **${allAbandoned.length}**`,
   ].join('\n');
 
-  embed.addFields({ name: '── All Reads ──', value: allCounts });
+  if (thisYearLogs.length > 0) {
+    const thisYearCounts = [
+      `✅ Finished: **${thisYearFinished.length}**`,
+      `📖 Reading:  **${thisYearReading.length}**`,
+      `✗  Abandoned: **${thisYearAbandoned.length}**`,
+    ].join('\n');
+    embed.addFields(
+      { name: '📅 This Year', value: thisYearCounts, inline: true },
+      { name: '📚 All Time',  value: allTimeCounts,  inline: true },
+    );
+  } else {
+    embed.addFields({ name: '📚 All Time', value: allTimeCounts });
+  }
 
   if (totalPages > 0) {
     embed.addFields({ name: 'Total Pages Read', value: totalPages.toLocaleString(), inline: true });
@@ -110,22 +206,36 @@ async function buildStatsEmbed(userId: string, displayName: string): Promise<Emb
   if (genre) {
     embed.addFields({ name: 'Favourite Genre', value: genre, inline: true });
   }
+  if (longestBook) {
+    embed.addFields({ name: 'Longest Finished', value: `${longestBook.book.title} (${longestBook.book.pages} pages)`, inline: true });
+  }
 
-  // ── Book of the Month ──────────────────────────────────────────────────────
+  // BOTM sections
   if (clubUniqueLogs.length > 0) {
+    embed.addFields({ name: '\u200b', value: '\u200b' });
+
+    // This Year
+    if (clubLogsThisYear.length > 0) {
+      const enrolledThisYear = clubLogsThisYear.length;
+      const rateThisYear = Math.round((clubFinishedThisYear.length / enrolledThisYear) * 100);
+      const lines = [
+        `✅ Finished: **${clubFinishedThisYear.length}** (${clubFinishedThisYear.length}/${enrolledThisYear}, ${rateThisYear}%)`,
+        `✗  Abandoned: **${clubAbandonedThisYear.length}**`,
+      ];
+      if (clubAvgThisYear) lines.push(`Avg rating: ${clubAvgThisYear} ⭐`);
+      embed.addFields({ name: '🏆 Book of the Month — This Year', value: lines.join('\n') });
+    }
+
+    // All Time
     const enrolled = clubUniqueLogs.length;
     const rate = Math.round((clubFinished.length / enrolled) * 100);
-
-    const clubCounts = [
+    const lines = [
       `✅ Finished: **${clubFinished.length}** (${clubFinished.length}/${enrolled}, ${rate}%)`,
       `✗  Abandoned: **${clubAbandoned.length}**`,
-    ].join('\n');
-
-    embed.addFields({ name: '── Book of the Month ──', value: clubCounts });
-
-    if (clubAvgRating) {
-      embed.addFields({ name: 'Avg Rating', value: `${clubAvgRating} ⭐`, inline: true });
-    }
+    ];
+    if (longestStreak > 0) lines.push(`🔥 Longest streak: **${longestStreak}** month${longestStreak !== 1 ? 's' : ''}`);
+    if (clubAvgRating) lines.push(`Avg rating: ${clubAvgRating} ⭐`);
+    embed.addFields({ name: '🏆 Book of the Month — All Time', value: lines.join('\n') });
   }
 
   return embed;

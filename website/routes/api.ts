@@ -16,9 +16,13 @@ router.use(requireAdmin);
 
 // Scrape a Goodreads URL and return book metadata (or existing DB record)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+const GOODREADS_BOOK_RE = /^https:\/\/(www\.)?goodreads\.com\/book\/show\//;
+
 router.get('/books/scrape', async (req: any, res: any) => {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'url parameter required' });
+  if (!GOODREADS_BOOK_RE.test(url as string))
+    return res.status(400).json({ error: 'url must be a Goodreads book URL' });
 
   try {
     // Return existing book if already in DB

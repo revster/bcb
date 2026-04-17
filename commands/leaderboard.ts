@@ -25,7 +25,9 @@ const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
 // ─── All-time leaderboard ────────────────────────────────────────────────────
 
 async function buildAllTime(): Promise<EmbedBuilder | null> {
-  const clubBookRows = db.select({ bookId: clubBooks.bookId }).from(clubBooks).all();
+  const clubBookRows = db.select({ bookId: clubBooks.bookId }).from(clubBooks)
+    .where(and(isNotNull(clubBooks.month), isNotNull(clubBooks.year)))
+    .all();
   if (!clubBookRows.length) return null;
 
   const clubBookIds = clubBookRows.map(cb => cb.bookId);

@@ -6,7 +6,7 @@
  * and text strings, so callers always work with Date instances.
  */
 
-import { sqliteTable, text, integer, real, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, uniqueIndex, unique } from 'drizzle-orm/sqlite-core';
 import { customType } from 'drizzle-orm/sqlite-core';
 import { relations } from 'drizzle-orm';
 import type { InferSelectModel } from 'drizzle-orm';
@@ -27,27 +27,32 @@ export const books = sqliteTable('Book', {
   id:           integer('id').primaryKey({ autoIncrement: true }),
   title:        text('title').notNull(),
   author:       text('author').notNull(),
-  goodreadsUrl: text('goodreadsUrl').notNull().unique(),
+  goodreadsUrl: text('goodreadsUrl').notNull(),
   image:        text('image'),
   pages:        integer('pages'),
   rating:       text('rating'),
   genres:       text('genres').notNull().default('[]'),
   createdAt:    timestamp('createdAt').notNull().$defaultFn(() => new Date()),
-});
+}, (t) => [
+  unique('Book_goodreadsUrl_key').on(t.goodreadsUrl),
+]);
 
 export const memberChannels = sqliteTable('MemberChannel', {
   id:        integer('id').primaryKey({ autoIncrement: true }),
-  userId:    text('userId').notNull().unique(),
+  userId:    text('userId').notNull(),
   username:  text('username').notNull(),
-  channelId: text('channelId').notNull().unique(),
+  channelId: text('channelId').notNull(),
   createdAt: timestamp('createdAt').notNull().$defaultFn(() => new Date()),
-});
+}, (t) => [
+  unique('MemberChannel_userId_key').on(t.userId),
+  unique('MemberChannel_channelId_key').on(t.channelId),
+]);
 
 export const readingLogs = sqliteTable('ReadingLog', {
   id:             integer('id').primaryKey({ autoIncrement: true }),
   userId:         text('userId').notNull(),
   bookId:         integer('bookId').notNull().references(() => books.id),
-  threadId:       text('threadId').unique(),
+  threadId:       text('threadId'),
   status:         text('status').notNull().default('reading'),
   progress:       real('progress').notNull().default(0),
   rating:         real('rating'),
@@ -56,7 +61,9 @@ export const readingLogs = sqliteTable('ReadingLog', {
   lastProgressAt: timestamp('lastProgressAt'),
   lastRemindedAt: timestamp('lastRemindedAt'),
   updatedAt:      timestamp('updatedAt').notNull().$defaultFn(() => new Date()).$onUpdate(() => new Date()),
-});
+}, (t) => [
+  unique('ReadingLog_threadId_key').on(t.threadId),
+]);
 
 export const users = sqliteTable('User', {
   userId:    text('userId').primaryKey(),
@@ -78,14 +85,16 @@ export const reminderQuips = sqliteTable('ReminderQuip', {
 
 export const clubBooks = sqliteTable('ClubBook', {
   id:                    integer('id').primaryKey({ autoIncrement: true }),
-  bookId:                integer('bookId').notNull().unique().references(() => books.id),
+  bookId:                integer('bookId').notNull().references(() => books.id),
   progressMessageId:     text('progressMessageId'),
   progressBarsMessageId: text('progressBarsMessageId'),
   epilogueThreadId:      text('epilogueThreadId'),
   month:                 integer('month'),
   year:                  integer('year'),
   createdAt:             timestamp('createdAt').notNull().$defaultFn(() => new Date()),
-});
+}, (t) => [
+  unique('ClubBook_bookId_unique').on(t.bookId),
+]);
 
 // ── Unused models (belong to features/voting — do not remove) ─────────────────
 
@@ -98,7 +107,7 @@ export const nominationPeriods = sqliteTable('NominationPeriod', {
   nominatorName: text('nominatorName'),
   createdAt:     timestamp('createdAt').notNull().$defaultFn(() => new Date()),
 }, (t) => [
-  uniqueIndex('NominationPeriod_month_year_key').on(t.month, t.year),
+  unique('NominationPeriod_month_year_key').on(t.month, t.year),
 ]);
 
 export const nominations = sqliteTable('Nomination', {
@@ -118,7 +127,7 @@ export const polls = sqliteTable('Poll', {
   open:      integer('open', { mode: 'boolean' }).notNull().default(true),
   createdAt: timestamp('createdAt').notNull().$defaultFn(() => new Date()),
 }, (t) => [
-  uniqueIndex('Poll_month_year_key').on(t.month, t.year),
+  unique('Poll_month_year_key').on(t.month, t.year),
 ]);
 
 export const pollVotes = sqliteTable('PollVote', {
@@ -128,14 +137,16 @@ export const pollVotes = sqliteTable('PollVote', {
   userId:    text('userId').notNull(),
   createdAt: timestamp('createdAt').notNull().$defaultFn(() => new Date()),
 }, (t) => [
-  uniqueIndex('PollVote_pollId_userId_key').on(t.pollId, t.userId),
+  unique('PollVote_pollId_userId_key').on(t.pollId, t.userId),
 ]);
 
 export const currentBooks = sqliteTable('CurrentBook', {
   id:        integer('id').primaryKey({ autoIncrement: true }),
-  bookId:    integer('bookId').notNull().unique().references(() => books.id),
+  bookId:    integer('bookId').notNull().references(() => books.id),
   startedAt: timestamp('startedAt').notNull().$defaultFn(() => new Date()),
-});
+}, (t) => [
+  unique('CurrentBook_bookId_unique').on(t.bookId),
+]);
 
 export const readingProgress = sqliteTable('ReadingProgress', {
   id:            integer('id').primaryKey({ autoIncrement: true }),
@@ -145,7 +156,7 @@ export const readingProgress = sqliteTable('ReadingProgress', {
   page:          integer('page').notNull(),
   updatedAt:     timestamp('updatedAt').notNull().$defaultFn(() => new Date()).$onUpdate(() => new Date()),
 }, (t) => [
-  uniqueIndex('ReadingProgress_currentBookId_userId_key').on(t.currentBookId, t.userId),
+  unique('ReadingProgress_currentBookId_userId_key').on(t.currentBookId, t.userId),
 ]);
 
 // ── Relations ─────────────────────────────────────────────────────────────────

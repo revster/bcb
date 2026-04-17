@@ -28,6 +28,7 @@ jest.mock('../../lib/progressPost', () => ({ updateProgressPost: jest.fn() }));
 jest.mock('../../lib/botLog', () => ({ botLog: jest.fn() }));
 
 const db = require('../../db');
+const { botLog } = require('../../lib/botLog');
 const { execute } = require('../../commands/club-start');
 
 const VALID_URL = 'https://www.goodreads.com/book/show/4671.The_Great_Gatsby';
@@ -53,16 +54,21 @@ function makeForumChannel(tagNames: string[] = []) {
   };
 }
 
-function makeInteraction(url = VALID_URL, forumChannel = makeForumChannel()) {
+function makeInteraction(url = VALID_URL, forumChannel = makeForumChannel(), { month = null as number | null, year = null as number | null } = {}) {
   return {
     options: {
       getString: jest.fn().mockReturnValue(url),
-      getInteger: jest.fn().mockReturnValue(null),
+      getInteger: jest.fn().mockImplementation((name: string) =>
+        name === 'month' ? month : name === 'year' ? year : null
+      ),
     },
+    user: { id: 'admin-123', username: 'admin' },
     guild: {
       channels: {
-        fetch: jest.fn().mockResolvedValue(forumChannel),
-        cache: { find: jest.fn().mockReturnValue(null) },
+        // fetch(id) → member forum channel; fetch() → all channels (epilogue lookup, returns none)
+        fetch: jest.fn().mockImplementation((id?: string) =>
+          id ? Promise.resolve(forumChannel) : Promise.resolve({ find: () => null })
+        ),
       },
     },
     reply: jest.fn().mockResolvedValue(undefined),
@@ -135,7 +141,7 @@ describe('/club-start execute', () => {
         .mockReturnValueOnce(CLUB_BOOK);
       mockAll.mockReturnValueOnce([MEMBER_A]);
       const forum = makeForumChannel(['Bot', 'Book of the Month', 'Other']);
-      const interaction = makeInteraction(VALID_URL, forum);
+      const interaction = makeInteraction(VALID_URL, forum, { month: 1, year: 2025 });
       await execute(interaction);
 
       expect(forum.threads.create).toHaveBeenCalledWith(
@@ -177,6 +183,85 @@ describe('/club-start execute', () => {
       expect(interaction.editReply).toHaveBeenCalledWith(
         expect.stringContaining('alice')
       );
+    });
+  });
+
+  describe('missing tag warnings', () => {
+    function setupOneMember() {
+      mockGet
+        .mockReturnValueOnce(BOOK)
+        .mockReturnValueOnce(CLUB_BOOK);
+      mockAll.mockReturnValueOnce([MEMBER_A]);
+    }
+
+    test('logs warning when Bot tag is missing', async () => {
+      setupOneMember();
+      const forum = makeForumChannel(['Book of the Month']); // Bot missing
+      const interaction = makeInteraction(VALID_URL, forum);
+      await execute(interaction);
+
+      expect(botLog).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining('Bot')
+      );
+    });
+
+    test('logs warning when Book of the Month tag is missing', async () => {
+      setupOneMember();
+      const forum = makeForumChannel(['Bot']); // Book of the Month missing
+      const interaction = makeInteraction(VALID_URL, forum, { month: 1, year: 2025 });
+      await execute(interaction);
+
+      expect(botLog).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining('Book of the Month')
+      );
+    });
+
+    test('lists all missing tags when both are absent', async () => {
+      setupOneMember();
+      const forum = makeForumChannel([]); // both missing
+      const interaction = makeInteraction(VALID_URL, forum, { month: 1, year: 2025 });
+      await execute(interaction);
+
+      expect(botLog).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringMatching(/Bot.*Book of the Month|Book of the Month.*Bot/)
+      );
+    });
+
+    test('mentions the admin user in the warning', async () => {
+      setupOneMember();
+      const forum = makeForumChannel([]);
+      const interaction = makeInteraction(VALID_URL, forum);
+      await execute(interaction);
+
+      expect(botLog).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining('<@admin-123>')
+      );
+    });
+
+    test('still creates the thread when tags are missing', async () => {
+      setupOneMember();
+      const forum = makeForumChannel([]);
+      const interaction = makeInteraction(VALID_URL, forum);
+      await execute(interaction);
+
+      expect(forum.threads.create).toHaveBeenCalledTimes(1);
+    });
+
+    test('does not log a warning when all required tags are present', async () => {
+      setupOneMember();
+      const forum = makeForumChannel(['Bot', 'Book of the Month']);
+      const interaction = makeInteraction(VALID_URL, forum);
+      await execute(interaction);
+
+      // botLog may be called for the final success log, but never for missing tags
+      const missingTagCalls = (botLog as jest.Mock).mock.calls.filter(
+        ([, msg]: [unknown, string]) => msg.includes('missing tags')
+      );
+      expect(missingTagCalls).toHaveLength(0);
     });
   });
 

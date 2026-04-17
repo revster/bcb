@@ -11,7 +11,7 @@
  * Must be run from inside a bot-managed book thread owned by the user.
  */
 
-import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, ThreadChannel, ForumChannel, TextChannel } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, ThreadChannel, ForumChannel } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import db = require('../db');
 import { readingLogs, clubBooks } from '../schema';
@@ -79,7 +79,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const clubBook = db.select().from(clubBooks).where(eq(clubBooks.bookId, log.bookId)).get();
   if (clubBook?.epilogueThreadId) {
     try {
-      const epilogueThread = await interaction.guild!.channels.fetch(clubBook.epilogueThreadId) as TextChannel;
+      const epilogueThread = await interaction.guild!.channels.fetch(clubBook.epilogueThreadId) as ThreadChannel;
       await epilogueThread.send(`${interaction.user.username} rated **${log.book.title}**: ${starDisplay} (${rating})`);
     } catch (err) {
       await botLog(interaction.guild!, `[rate] failed to post in epilogue thread: ${(err as Error)?.message ?? String(err)}`);

@@ -53,7 +53,7 @@ The bot pings members who haven't logged progress on the current month's Book of
 |---|---|
 | `/register <user> <channel>` | Map a member to their personal forum channel |
 | `/unregister <user>` | Remove a member from club tracking (threads/logs kept) |
-| `/club-start <url> [month] [year]` | Start a club read — creates threads for all members, opens epilogue thread, initialises `#progress` |
+| `/club-start <url> [month] [year]` | Start a club read — creates threads for all members, opens epilogue thread, initialises `#progress`. Providing `month` and `year` designates it as an official Book of the Month (appears in stats/leaderboard). Without them it's an informal club read — threads and progress tracking still work, but it won't count in BOTM reports. |
 | `/reminders enable` | Enable weekly reading reminder pings |
 | `/reminders disable` | Disable weekly reading reminder pings |
 | `/reminders status` | Check whether reminders are currently enabled |
@@ -69,7 +69,7 @@ The bot pings members who haven't logged progress on the current month's Book of
 ### Reports
 | Command | Description |
 |---|---|
-| `/stats [user]` | Personal reading summary — all reads + club read breakdown |
+| `/stats [user]` | Personal reading summary — progress bars for current reads, this year vs all-time counts, total pages, avg rating, favourite genre, longest book finished, and a separate BOTM breakdown with completion streak |
 | `/leaderboard [year]` | Club read completion ranking; year shows a month-by-month grid |
 | `/finishers [year]` | Members ranked by club reads completed |
 | `/abandoners [year]` | Members ranked by club reads abandoned |
@@ -117,9 +117,8 @@ For the web panel, enable the OAuth2 redirect URI in your Discord application un
 ### Database
 
 ```bash
-npx prisma db push --accept-data-loss
-npx prisma generate
-npm run seed-quips   # Populate the default reminder quip library
+rm -f dev.db && npx drizzle-kit push   # Create the SQLite schema from scratch
+npx tsx seed.ts                         # Seed initial quips (run once after pushing schema)
 ```
 
 ### Register slash commands
@@ -153,7 +152,7 @@ Each registered member also needs a **Forum channel** that the bot will create t
 ## Deploying to a new server
 
 1. Deploy code, copy `.env` with new `GUILD_ID` and production `DISCORD_REDIRECT_URI`
-2. `npx prisma db push --accept-data-loss` — initialise schema
+2. `rm -f dev.db && npx drizzle-kit push` — initialise schema
 3. `npx tsx deploy-commands.ts` — register commands with the new guild
 4. Admin runs `/register` for each member pointing at the new server's forum channels
 5. Admin runs `/club-start` for the active book if one is in progress
@@ -165,7 +164,7 @@ Discord user IDs are global, so all reading history is portable across servers.
 ```bash
 npm test                               # Run unit tests
 npm run typecheck                      # Type-check without emitting
-npx prisma studio                      # Browse the database
+npx drizzle-kit studio                 # Browse the database in a web UI
 npx tsx clear-global-commands.ts       # Wipe globally-registered commands (fixes duplicates)
 ```
 
@@ -173,7 +172,7 @@ npx tsx clear-global-commands.ts       # Wipe globally-registered commands (fixe
 
 - [TypeScript](https://www.typescriptlang.org/) — full codebase; executed directly via [tsx](https://github.com/privatenumber/tsx) (no compile step)
 - [discord.js](https://discord.js.org/) v14
-- [Prisma](https://www.prisma.io/) 5 + SQLite
+- [Drizzle ORM](https://orm.drizzle.team/) + [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) for synchronous SQLite access
 - [cheerio](https://cheerio.js.org/) for Goodreads scraping
 - [Jest](https://jestjs.io/) + [ts-jest](https://kulshekhar.github.io/ts-jest/) for unit tests
 - [Express](https://expressjs.com/) v5 + EJS for the admin web panel

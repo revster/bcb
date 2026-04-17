@@ -12,7 +12,7 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, and, isNotNull } from 'drizzle-orm';
 import db = require('../db');
 import { clubBooks, readingLogs } from '../schema';
 import type { ReadingLog } from '../schema';
@@ -68,8 +68,8 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   await interaction.deferReply();
 
   const clubBookRows = year
-    ? db.select({ bookId: clubBooks.bookId }).from(clubBooks).where(eq(clubBooks.year, year)).all()
-    : db.select({ bookId: clubBooks.bookId }).from(clubBooks).all();
+    ? db.select({ bookId: clubBooks.bookId }).from(clubBooks).where(and(eq(clubBooks.year, year), isNotNull(clubBooks.month))).all()
+    : db.select({ bookId: clubBooks.bookId }).from(clubBooks).where(and(isNotNull(clubBooks.month), isNotNull(clubBooks.year))).all();
 
   if (!clubBookRows.length) {
     await interaction.editReply({

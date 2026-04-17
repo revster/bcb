@@ -68,8 +68,7 @@ router.get('/discord/callback', async (req: SessionReq, res: Response) => {
     if (!tokenRes.ok) throw new Error(`Token exchange failed: ${tokenRes.status}`);
     const { access_token } = await tokenRes.json() as { access_token: string };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const discordUser = await getDiscordUser(access_token) as any;
+    const discordUser = await getDiscordUser(access_token);
 
     if (!(await isAdmin(discordUser.id))) {
       return res.redirect('/auth/login?error=not_admin');

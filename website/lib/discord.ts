@@ -2,13 +2,19 @@ const ADMIN_ROLE_NAMES = ['S.P.E.W. President', 'S.P.E.W. Secretary'];
 
 interface DiscordRole { id: string; name: string }
 interface DiscordMember { roles: string[] }
+export interface DiscordUser {
+  id: string;
+  username: string;
+  global_name: string | null;
+  avatar: string | null;
+}
 
-async function getDiscordUser(accessToken: string): Promise<unknown> {
+async function getDiscordUser(accessToken: string): Promise<DiscordUser> {
   const res = await fetch('https://discord.com/api/users/@me', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (!res.ok) throw new Error('Failed to fetch Discord user');
-  return res.json();
+  return res.json() as Promise<DiscordUser>;
 }
 
 async function getGuildMember(userId: string): Promise<DiscordMember | null> {

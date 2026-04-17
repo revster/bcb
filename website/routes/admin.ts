@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 import { eq, inArray, and, asc, desc, count } from 'drizzle-orm';
-const db = require('../../db');
+import db = require('../../db');
 import { books, readingLogs, clubBooks, users, memberChannels, reminderQuips } from '../../schema';
+import type { LogWithBook } from '../../schema';
 import scrapeBook from '../../lib/scrapeBook';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -42,9 +43,11 @@ function upsertClubBook(bookId: number, month: number | null, year: number | nul
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-router.get('/', async (req: any, res: any) => {
-  const c = (t: Parameters<typeof db.select>[0]) => (db.select({ c: count() }).from(t).get() as { c: number }).c;
-  const [logCount, bookCount, memberCount, clubBookCount] = [readingLogs, books, users, clubBooks].map(c);
+router.get('/', async (_req: any, res: any) => {
+  const logCount      = (db.select({ c: count() }).from(readingLogs).get() as { c: number }).c;
+  const bookCount     = (db.select({ c: count() }).from(books).get() as { c: number }).c;
+  const memberCount   = (db.select({ c: count() }).from(users).get() as { c: number }).c;
+  const clubBookCount = (db.select({ c: count() }).from(clubBooks).get() as { c: number }).c;
   res.render('admin/dashboard', { logCount, bookCount, memberCount, clubBookCount });
 });
 
@@ -104,7 +107,7 @@ router.get('/logs/new', async (_req: any, res: any) => {
     log:      null,
     book:     null,
     clubBook: null,
-    members:  await getMembers(),
+    members:  getMembers(),
     values:   {},
     error:    null,
   });
@@ -149,7 +152,7 @@ router.post('/logs', async (req: any, res: any) => {
       log:      null,
       book:     null,
       clubBook: null,
-      members:  await getMembers(),
+      members:  getMembers(),
       values:   req.body,
       error:    (err as Error).message,
     });
@@ -162,9 +165,9 @@ router.post('/logs', async (req: any, res: any) => {
 router.get('/logs/:id/edit', async (req: any, res: any) => {
   const id = parseInt(req.params.id, 10);
   const log = await db.query.readingLogs.findFirst({
-    where: (rl: any, { eq }: any) => eq(rl.id, id),
+    where: (rl, { eq }) => eq(rl.id, id),
     with: { book: true },
-  }) as any;
+  }) as LogWithBook | undefined;
   if (!log) return res.status(404).render('error', { title: 'Not Found', message: 'Log not found.' });
 
   const clubBook = db.select().from(clubBooks).where(eq(clubBooks.bookId, log.bookId)).get();
@@ -174,7 +177,7 @@ router.get('/logs/:id/edit', async (req: any, res: any) => {
     log,
     book:     log.book,
     clubBook,
-    members:  await getMembers(),
+    members:  getMembers(),
     values:   {},
     error:    null,
   });
@@ -186,9 +189,9 @@ router.post('/logs/:id', async (req: any, res: any) => {
   const { status, rating, startedAt, finishedAt, isBotm, botmMonth, botmYear } = req.body;
 
   const log = await db.query.readingLogs.findFirst({
-    where: (rl: any, { eq }: any) => eq(rl.id, id),
+    where: (rl, { eq }) => eq(rl.id, id),
     with: { book: true },
-  }) as any;
+  }) as LogWithBook | undefined;
   if (!log) return res.status(404).render('error', { title: 'Not Found', message: 'Log not found.' });
 
   try {
@@ -222,7 +225,7 @@ router.post('/logs/:id', async (req: any, res: any) => {
       log,
       book:     log.book,
       clubBook,
-      members:  await getMembers(),
+      members:  getMembers(),
       values:   req.body,
       error:    (err as Error).message,
     });
