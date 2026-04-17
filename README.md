@@ -111,6 +111,7 @@ DATABASE_URL=file:./dev.db
 SESSION_SECRET=a_long_random_string
 DISCORD_CLIENT_SECRET=your_oauth2_client_secret
 DISCORD_REDIRECT_URI=http://localhost:3000/auth/discord/callback
+ADMIN_ROLE_NAMES=Admin,Moderator
 ```
 
 For the web panel, enable the OAuth2 redirect URI in your Discord application under **OAuth2 → Redirects**.

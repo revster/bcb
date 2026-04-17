@@ -41,6 +41,7 @@ Requires a `.env` file with:
 - `SESSION_SECRET` — secret for Express session signing (web panel only)
 - `DISCORD_CLIENT_SECRET` — OAuth2 client secret (web panel only)
 - `DISCORD_REDIRECT_URI` — OAuth2 redirect URI, e.g. `http://localhost:3000/auth/discord/callback` (web panel only)
+- `ADMIN_ROLE_NAMES` — comma-separated list of Discord role names granted admin access to the web panel, e.g. `Admin,Moderator` (web panel only)
 
 ## Dev Commands
 

@@ -1,4 +1,6 @@
-const ADMIN_ROLE_NAMES = ['S.P.E.W. President', 'S.P.E.W. Secretary'];
+function getAdminRoleNames(): string[] {
+  return (process.env.ADMIN_ROLE_NAMES ?? '').split(',').map(s => s.trim()).filter(Boolean);
+}
 
 interface DiscordRole { id: string; name: string }
 interface DiscordMember { roles: string[] }
@@ -43,7 +45,7 @@ async function isAdmin(userId: string): Promise<boolean> {
   ]);
   if (!member) return false;
   const adminRoleIds = new Set(
-    allRoles.filter((r: DiscordRole) => ADMIN_ROLE_NAMES.includes(r.name)).map((r: DiscordRole) => r.id)
+    allRoles.filter((r: DiscordRole) => getAdminRoleNames().includes(r.name)).map((r: DiscordRole) => r.id)
   );
   return member.roles.some((id: string) => adminRoleIds.has(id));
 }
