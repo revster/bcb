@@ -35,7 +35,6 @@
   "homepage": "https://github.com/revster/bcb#readme",
   "description": "",
   "dependencies": {
-    "@prisma/client": "^5.22.0",
     "better-sqlite3": "^12.9.0",
     "cheerio": "^1.2.0",
     "connect-sqlite3": "^0.9.16",
@@ -47,13 +46,12 @@
     "express-rate-limit": "^8.3.2",
     "express-session": "^1.19.0",
     "helmet": "^8.1.0",
-    "node-cron": "^4.2.1",
-    "prisma": "^5.22.0"
+    "node-cron": "^4.2.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/express": "^5.0.6",
-    "@types/express-session": "^1.18.2",
+    "@types/express-session": "^1.19.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.6.0",
     "@types/node-cron": "^3.0.11",
@@ -62,6 +60,6 @@
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.9",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.3"
   }
 }
