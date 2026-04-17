@@ -16,6 +16,9 @@ const csrf         = require('./middleware/csrf');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
+// ── Trust Nginx reverse proxy ─────────────────────────────────────────────────
+app.set('trust proxy', 1);
+
 // ── Security headers ──────────────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
