@@ -57,6 +57,7 @@ The bot pings members who haven't logged progress on the current month's Book of
 | `/reminders enable` | Enable weekly reading reminder pings |
 | `/reminders disable` | Disable weekly reading reminder pings |
 | `/reminders status` | Check whether reminders are currently enabled |
+| `/checkup` | Verify every registered member has a valid forum channel with the required Bot and Book of the Month tags |
 
 ### Member
 | Command | Description |

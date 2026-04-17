@@ -27,6 +27,7 @@ A Discord bot for managing a book club server. Core features:
 - `features/reminder` — weekly reading reminders with quip management (merged into main)
 - `features/typescript` — full TypeScript migration (merged into main via features/drizzle)
 - `features/drizzle` — Prisma → Drizzle ORM migration, TypeScript, enhanced /stats, BOTM vs club read distinction, seed script (merged into main)
+- `features/websiteImprovements` — /checkup command, multi-book-month streak fix, login page cleanup (merged into main)
 
 **The `dev.db` file is not tracked by git.** To recreate it from scratch: `rm -f dev.db && npx drizzle-kit push`. Schema is defined in `schema.ts`.
 
@@ -84,11 +85,12 @@ Each file exports `{ data, execute }` — `data` is a `SlashCommandBuilder` and 
 | `/rate <rating>` | Rates the book 1–5 stars (decimals allowed). Works at any status (reading, finished, abandoned). Posts rating in thread and, if a club read, in the epilogue thread. |
 | `/abandon` | Marks the book as abandoned at current progress. Shows `✗` in `#progress`. |
 | `/club-start <url> [month] [year]` | Admin. Designates a book as the active club read. Always creates threads for all registered members and opens an epilogue thread. If `month` and `year` are provided, applies the "Bot" and "Book of the Month" tags and the book counts as an official BOTM in all reports. Without month/year, only the "Bot" tag is applied and the book is excluded from BOTM stats (threads and progress tracking still work normally). Both or neither must be supplied — providing only one is rejected. |
-| `/stats [user]` | Personal reading summary. Defaults to caller; pass a user to look up someone else. Sections: currently reading (mini progress bars), this year vs all-time finished/reading/abandoned counts, total pages, avg rating, favourite genre, longest book finished, and two BOTM subsections (This Year and All Time) with completion rate, avg rating, and longest streak. Only club books with both month and year set count as BOTM. Deduplicates by bookId using status priority: finished > reading > abandoned. |
+| `/stats [user]` | Personal reading summary. Defaults to caller; pass a user to look up someone else. Sections: currently reading (mini progress bars), this year vs all-time finished/reading/abandoned counts, total pages, avg rating, favourite genre, longest book finished, and two BOTM subsections (This Year and All Time) with completion rate, avg rating, and longest streak. Only club books with both month and year set count as BOTM. Deduplicates by bookId using status priority: finished > reading > abandoned. Streak groups books by month/year — finishing any one book in a shared month keeps the streak alive. |
 | `/leaderboard [year]` | Without year: ranked list of members by total BOTM completions (all time). With year: monospace grid of members × months showing who finished each club read. |
 | `/finishers [year]` | Ranks members by number of club reads completed. Shows finished count, enrolled count, completion rate. Optional year filter. Competition ranking (1,1,3). |
 | `/abandoners [year]` | Ranks members by number of club reads abandoned. Shows abandoned count, enrolled count, abandonment rate. Optional year filter. Competition ranking. |
 | `/abandoned` | Ranks club books by how many members abandoned them. Shows title, author, month/year, abandoned/enrolled ratio. Competition ranking. |
+| `/checkup` | Admin. Ephemeral. For every registered member, verifies their forum channel still exists and has both the "Bot" and "Book of the Month" tags. Reports per-member issues or an all-clear. |
 
 ### Discord channels (all looked up by name, never stored by ID)
 
