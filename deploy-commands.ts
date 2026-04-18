@@ -1,12 +1,21 @@
 import 'dotenv/config';
-import { REST, Routes } from 'discord.js';
+import { REST, Routes, PermissionFlagsBits } from 'discord.js';
 import * as fs from 'fs';
 import * as path from 'path';
+
+const ADMIN_COMMANDS = new Set(['register', 'unregister', 'club-start', 'reminders', 'checkup']);
 
 const commands = fs
   .readdirSync(path.join(__dirname, 'commands'))
   .filter((file: string) => file.endsWith('.ts') || file.endsWith('.js'))
-  .map((file: string) => require(`./commands/${file.replace(/\.(ts|js)$/, '')}`).data.toJSON());
+  .map((file: string) => {
+    const name = file.replace(/\.(ts|js)$/, '');
+    const json = require(`./commands/${name}`).data.toJSON();
+    if (ADMIN_COMMANDS.has(name)) {
+      json.default_member_permissions = PermissionFlagsBits.Administrator.toString();
+    }
+    return json;
+  });
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN as string);
 
