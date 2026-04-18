@@ -3,15 +3,17 @@ import { REST, Routes, PermissionFlagsBits } from 'discord.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// All commands are admin-only until the bot is public.
-// When opening up to members, move non-admin commands out of this restriction.
+const ADMIN_COMMANDS = new Set(['register', 'unregister', 'club-start', 'reminders', 'checkup', 'club-stats']);
+
 const commands = fs
   .readdirSync(path.join(__dirname, 'commands'))
   .filter((file: string) => file.endsWith('.ts') || file.endsWith('.js'))
   .map((file: string) => {
     const name = file.replace(/\.(ts|js)$/, '');
     const json = require(`./commands/${name}`).data.toJSON();
-    json.default_member_permissions = PermissionFlagsBits.Administrator.toString();
+    if (ADMIN_COMMANDS.has(name)) {
+      json.default_member_permissions = PermissionFlagsBits.Administrator.toString();
+    }
     return json;
   });
 
