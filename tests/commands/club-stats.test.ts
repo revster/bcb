@@ -279,8 +279,8 @@ describe('year filter only', () => {
     await execute(interaction);
 
     const desc = getEmbed(interaction).data.description;
-    expect(desc).toContain('Jan');
-    expect(desc).toContain('Jun');
+    expect(desc).toContain('Ja');
+    expect(desc).toContain('Jn');
   });
 
   test('users sorted by finished count descending', async () => {

@@ -21,10 +21,8 @@ import db = require('../db');
 import { clubBooks, readingLogs } from '../schema';
 import { resolveUsernames } from '../lib/resolveUsernames';
 
-const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-const COL_W = 5;
+const MONTH_ABBR = ['Ja', 'Fe', 'Mr', 'Ap', 'My', 'Jn',
+                    'Jl', 'Au', 'Se', 'Oc', 'No', 'De'];
 
 function symbolFor(status: string | undefined): string {
   switch (status) {
@@ -42,12 +40,6 @@ function effectiveStatus(statuses: string[]): string {
   if (statuses.includes('reading'))   return 'reading';
   if (statuses.includes('abandoned')) return 'abandoned';
   return 'dnr';
-}
-
-function center(s: string, w: number): string {
-  const spaces = w - s.length;
-  const left = Math.floor(spaces / 2);
-  return ' '.repeat(left) + s + ' '.repeat(spaces - left);
 }
 
 type ClubBookRow = { bookId: number; month: number | null; year: number | null };
@@ -76,13 +68,13 @@ function buildYearGrid(
   const maxNameLen = Math.max(...userIds.map(id => (usernameMap[id] ?? id).length), 4);
   const pad        = (s: string, w: number) => s.padEnd(w);
 
-  const header = pad('', maxNameLen + 2) + months.map(m => center(m, COL_W)).join('');
+  const header = pad('', maxNameLen + 2) + months.map(m => `|${m} `).join('') + '|';
   const sep    = '─'.repeat(header.length);
 
   const rows = userIds.map(uid => {
     const name  = usernameMap[uid] ?? uid;
-    const cells = yearBooks.map(cb => center(symbolFor(statusMap.get(`${uid}:${cb.bookId}`)), COL_W));
-    return pad(name, maxNameLen + 2) + cells.join('');
+    const cells = yearBooks.map(cb => `| ${symbolFor(statusMap.get(`${uid}:${cb.bookId}`))} `);
+    return pad(name, maxNameLen + 2) + cells.join('') + '|';
   });
 
   return [header, sep, ...rows].join('\n');
@@ -108,8 +100,8 @@ function buildUserGrid(
     if (!yearBooks.some(cb => statusMap.has(`${userId}:${cb.bookId}`))) continue;
 
     const months  = yearBooks.map(cb => MONTH_ABBR[(cb.month ?? 1) - 1]);
-    const header  = String(year).padEnd(6) + months.map(m => center(m, COL_W)).join('');
-    const symbols = ' '.repeat(6) + yearBooks.map(cb => center(symbolFor(statusMap.get(`${userId}:${cb.bookId}`)), COL_W)).join('');
+    const header  = String(year).padEnd(6) + months.map(m => `|${m} `).join('') + '|';
+    const symbols = ' '.repeat(6) + yearBooks.map(cb => `| ${symbolFor(statusMap.get(`${userId}:${cb.bookId}`))} `).join('') + '|';
     sections.push(header + '\n' + symbols);
   }
 
