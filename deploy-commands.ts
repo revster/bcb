@@ -3,7 +3,7 @@ import { REST, Routes, PermissionFlagsBits } from 'discord.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const ADMIN_COMMANDS = new Set(['register', 'unregister', 'club-start', 'reminders', 'checkup', 'club-stats']);
+const ADMIN_COMMANDS = new Set(['register', 'unregister', 'club-start', 'reminders', 'checkup']);
 
 const commands = fs
   .readdirSync(path.join(__dirname, 'commands'))

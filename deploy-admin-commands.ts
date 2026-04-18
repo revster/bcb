@@ -15,7 +15,7 @@ import 'dotenv/config';
 import { REST, Routes, PermissionFlagsBits } from 'discord.js';
 
 const ADMIN_COMMANDS    = ['register', 'unregister', 'checkup', 'test'];
-const REPORT_COMMANDS   = ['stats', 'leaderboard'];
+const REPORT_COMMANDS   = ['stats', 'leaderboard', 'club-stats'];
 
 const adminCommands = ADMIN_COMMANDS.map(name =>
   require(`./commands/${name}`).data.toJSON()
