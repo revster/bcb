@@ -730,6 +730,7 @@ describe('/stats execute', () => {
       expect(field.value).toContain('streak');
     });
   });
+});
 
 // ── Non-BOTM club reads ───────────────────────────────────────────────────────
 

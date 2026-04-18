@@ -64,9 +64,10 @@ function deduplicateByBook(logs: LogWithBook[]): LogWithBook[] {
   }
   return [...groups.values()].map(({ log, statuses }) => ({
     ...log,
-    status: statuses.includes('finished') ? 'finished'
-           : statuses.includes('reading')  ? 'reading'
-           : 'abandoned',
+    status: statuses.includes('finished')  ? 'finished'
+           : statuses.includes('reading')   ? 'reading'
+           : statuses.includes('abandoned') ? 'abandoned'
+           : 'dnr',
   }));
 }
 
@@ -166,8 +167,10 @@ async function buildStatsEmbed(userId: string, displayName: string): Promise<Emb
   // ── BOTM ──────────────────────────────────────────────────────────────────
   const clubFinished          = clubUniqueLogs.filter(l => l.status === 'finished');
   const clubAbandoned         = clubUniqueLogs.filter(l => l.status === 'abandoned');
+  const clubDnr               = clubUniqueLogs.filter(l => l.status === 'dnr');
   const clubFinishedThisYear  = clubLogsThisYear.filter(l => l.status === 'finished');
   const clubAbandonedThisYear = clubLogsThisYear.filter(l => l.status === 'abandoned');
+  const clubDnrThisYear       = clubLogsThisYear.filter(l => l.status === 'dnr');
 
   // ── Extra stats ───────────────────────────────────────────────────────────
   const totalPages = allFinished.reduce((sum, l) => sum + (l.book.pages ?? 0), 0);
@@ -244,6 +247,7 @@ async function buildStatsEmbed(userId: string, displayName: string): Promise<Emb
       const lines = [
         `✅ Finished: **${clubFinishedThisYear.length}** (${clubFinishedThisYear.length}/${enrolledThisYear}, ${rateThisYear}%)`,
         `✗  Abandoned: **${clubAbandonedThisYear.length}**`,
+        `—  Did not read: **${clubDnrThisYear.length}**`,
       ];
       if (clubAvgThisYear) lines.push(`Avg rating: ${clubAvgThisYear} ⭐`);
       embed.addFields({ name: '🏆 Book of the Month — This Year', value: lines.join('\n') });
@@ -255,6 +259,7 @@ async function buildStatsEmbed(userId: string, displayName: string): Promise<Emb
     const lines = [
       `✅ Finished: **${clubFinished.length}** (${clubFinished.length}/${enrolled}, ${rate}%)`,
       `✗  Abandoned: **${clubAbandoned.length}**`,
+      `—  Did not read: **${clubDnr.length}**`,
     ];
     if (longestStreak > 0) lines.push(`🔥 Longest streak: **${longestStreak}** month${longestStreak !== 1 ? 's' : ''}`);
     if (clubAvgRating) lines.push(`Avg rating: ${clubAvgRating} ⭐`);

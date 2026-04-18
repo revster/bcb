@@ -35,7 +35,7 @@ function userStats(logs: ReadingLog[]): { enrolled: Record<string, number>; aban
   const abandoned: Record<string, number> = {};
   for (const { userId, statuses } of groups.values()) {
     enrolled[userId] = (enrolled[userId] ?? 0) + 1;
-    if (!statuses.includes('finished') && !statuses.includes('reading')) {
+    if (!statuses.includes('finished') && !statuses.includes('reading') && statuses.includes('abandoned')) {
       abandoned[userId] = (abandoned[userId] ?? 0) + 1;
     }
   }
