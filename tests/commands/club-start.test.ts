@@ -7,6 +7,7 @@ jest.mock('../../db', () => {
   const chain: any = {
     from:               jest.fn().mockReturnThis(),
     where:              jest.fn().mockReturnThis(),
+    innerJoin:          jest.fn().mockReturnThis(),
     values:             jest.fn().mockReturnThis(),
     set:                jest.fn().mockReturnThis(),
     onConflictDoUpdate: jest.fn().mockReturnThis(),
@@ -262,6 +263,112 @@ describe('/club-start execute', () => {
         ([, msg]: [unknown, string]) => msg.includes('missing tags')
       );
       expect(missingTagCalls).toHaveLength(0);
+    });
+  });
+
+  describe('auto-DNR previous BOTM', () => {
+    const PREV_CB = { bookId: 99, month: 1, year: 2025, title: 'Prev Book' };
+
+    function setupWithMonthYear(members = [MEMBER_A, MEMBER_B]) {
+      mockGet
+        .mockReturnValueOnce(BOOK)
+        .mockReturnValueOnce(CLUB_BOOK);
+      mockAll.mockReturnValueOnce(members); // memberChannels (mockAll #1)
+    }
+
+    test('skipped when no month/year provided', async () => {
+      setupWithMonthYear();
+      const interaction = makeInteraction(VALID_URL, makeForumChannel());
+      await execute(interaction);
+
+      // mockAll #2 (prev club books) never called — db.select chain only called once
+      expect(botLog).not.toHaveBeenCalledWith(
+        expect.anything(), expect.stringContaining('Auto-DNR')
+      );
+    });
+
+    test('skipped when no previous BOTM exists', async () => {
+      setupWithMonthYear();
+      mockAll.mockReturnValueOnce([]); // prev club books → none
+      const interaction = makeInteraction(VALID_URL, makeForumChannel(), { month: 3, year: 2025 });
+      await execute(interaction);
+
+      expect(botLog).not.toHaveBeenCalledWith(
+        expect.anything(), expect.stringContaining('Auto-DNR')
+      );
+    });
+
+    test('skipped when all previous BOTM logs have progress > 0', async () => {
+      setupWithMonthYear();
+      mockAll
+        .mockReturnValueOnce([PREV_CB])  // prev club books
+        .mockReturnValueOnce([]);        // no untouched logs
+      const interaction = makeInteraction(VALID_URL, makeForumChannel(), { month: 3, year: 2025 });
+      await execute(interaction);
+
+      expect(db.update).not.toHaveBeenCalled();
+      expect(botLog).not.toHaveBeenCalledWith(
+        expect.anything(), expect.stringContaining('Auto-DNR')
+      );
+    });
+
+    test('updates untouched reading logs to dnr', async () => {
+      setupWithMonthYear([MEMBER_A, MEMBER_B]);
+      mockAll
+        .mockReturnValueOnce([PREV_CB])              // prev club books
+        .mockReturnValueOnce([{ userId: MEMBER_A.userId }]); // one untouched log
+      const interaction = makeInteraction(VALID_URL, makeForumChannel(), { month: 3, year: 2025 });
+      await execute(interaction);
+
+      expect(db.update).toHaveBeenCalled();
+    });
+
+    test('logs auto-DNR to bot-log with book title, month/year, and usernames', async () => {
+      setupWithMonthYear([MEMBER_A, MEMBER_B]);
+      mockAll
+        .mockReturnValueOnce([PREV_CB])
+        .mockReturnValueOnce([{ userId: MEMBER_A.userId }, { userId: MEMBER_B.userId }]);
+      const interaction = makeInteraction(VALID_URL, makeForumChannel(), { month: 3, year: 2025 });
+      await execute(interaction);
+
+      expect(botLog).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringMatching(/Auto-DNR.*Prev Book.*January 2025.*alice.*bob|Auto-DNR.*Prev Book.*January 2025.*bob.*alice/)
+      );
+    });
+
+    test('picks the most recent previous BOTM when multiple exist', async () => {
+      setupWithMonthYear([MEMBER_A]);
+      // Two prev club books: Feb 2025 is more recent than Jan 2025
+      mockAll
+        .mockReturnValueOnce([
+          { bookId: 88, month: 1, year: 2025, title: 'Jan Book' },
+          { bookId: 99, month: 2, year: 2025, title: 'Feb Book' },
+        ])
+        .mockReturnValueOnce([{ userId: MEMBER_A.userId }]);
+      const interaction = makeInteraction(VALID_URL, makeForumChannel(), { month: 3, year: 2025 });
+      await execute(interaction);
+
+      expect(botLog).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining('Feb Book')
+      );
+      expect(botLog).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.stringContaining('Jan Book')
+      );
+    });
+
+    test('does not DNR books from a future month', async () => {
+      setupWithMonthYear([MEMBER_A]);
+      // April 2025 is AFTER the current March 2025 — should not be considered previous
+      mockAll
+        .mockReturnValueOnce([{ bookId: 77, month: 4, year: 2025, title: 'April Book' }])
+        .mockReturnValueOnce([]);
+      const interaction = makeInteraction(VALID_URL, makeForumChannel(), { month: 3, year: 2025 });
+      await execute(interaction);
+
+      expect(db.update).not.toHaveBeenCalled();
     });
   });
 

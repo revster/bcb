@@ -13,7 +13,7 @@
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits, ForumChannel } from 'discord.js';
-import { eq } from 'drizzle-orm';
+import { eq, and, isNotNull, inArray } from 'drizzle-orm';
 import db = require('../db');
 import { books, clubBooks, memberChannels, readingLogs } from '../schema';
 import scrapeBook from '../lib/scrapeBook';
@@ -101,6 +101,57 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   // Create a thread in every registered member's forum channel
   const allMemberChannels = db.select().from(memberChannels).all();
+
+  // ── Auto-DNR previous BOTM ────────────────────────────────────────────────
+  // When starting an official BOTM, stamp any member whose reading log for the
+  // previous BOTM is still untouched (status='reading', progress=0) as DNR.
+  if (month && year) {
+    const allPrevCbs = db
+      .select({ bookId: clubBooks.bookId, month: clubBooks.month, year: clubBooks.year, title: books.title })
+      .from(clubBooks)
+      .innerJoin(books, eq(clubBooks.bookId, books.id))
+      .where(and(isNotNull(clubBooks.month), isNotNull(clubBooks.year)))
+      .all();
+
+    const currentOrdinal = year * 12 + month;
+    const prevCb = allPrevCbs
+      .filter(cb => cb.year! * 12 + cb.month! < currentOrdinal)
+      .sort((a, b) => (b.year! * 12 + b.month!) - (a.year! * 12 + a.month!))[0] ?? null;
+
+    if (prevCb) {
+      const memberUserIds = allMemberChannels.map(mc => mc.userId);
+      const toAutoDnr = memberUserIds.length > 0
+        ? db.select({ userId: readingLogs.userId })
+            .from(readingLogs)
+            .where(and(
+              eq(readingLogs.bookId, prevCb.bookId),
+              inArray(readingLogs.userId, memberUserIds),
+              eq(readingLogs.status, 'reading'),
+              eq(readingLogs.progress, 0),
+            ))
+            .all()
+        : [];
+
+      if (toAutoDnr.length > 0) {
+        const dnrUserIds = toAutoDnr.map(l => l.userId);
+        db.update(readingLogs)
+          .set({ status: 'dnr' })
+          .where(and(
+            eq(readingLogs.bookId, prevCb.bookId),
+            inArray(readingLogs.userId, dnrUserIds),
+          ))
+          .run();
+
+        const dnrUsernames = allMemberChannels
+          .filter(mc => dnrUserIds.includes(mc.userId))
+          .map(mc => mc.username);
+        const prevMonthYear = `${MONTHS[prevCb.month! - 1]} ${prevCb.year}`;
+        await botLog(interaction.guild!,
+          `[club-start] Auto-DNR set for **${prevCb.title}** (${prevMonthYear}): ${dnrUsernames.join(', ')}`
+        );
+      }
+    }
+  }
   const embed = buildBookEmbed(book, `Started reading on ${new Date().toDateString()}`);
   const threadTagNames = month && year
     ? [BOT_TAG_NAME, BOTM_TAG_NAME]
