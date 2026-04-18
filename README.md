@@ -26,13 +26,14 @@ When a member finishes (progress hits 100%), the bot posts a completion embed in
 ### Reports
 A suite of commands for reviewing reading history across the club:
 
-- `/stats` — personal reading summary (finished/reading/abandoned counts, total pages, avg rating, favourite genre, and a separate breakdown for club reads). Pass a user to look up someone else.
+- `/stats` — personal reading summary (finished/reading/abandoned counts, total pages, avg rating, favourite genre, a BOTM breakdown with completion streak, and a BOTM history grid showing your participation across all years at a glance). Pass a user to look up someone else.
+- `/club-stats <year>` — per-member participation grid for a given year showing ✅ finished, 💀 abandoned, ❌ DNR, or ➖ not in club for each month. Pass a user to filter to one person.
 - `/leaderboard` — all-time club read completion ranking. Add a year for a grid showing who finished each month's pick.
 - `/finishers` — ranks members by club reads completed, with enrolled count and completion rate.
 - `/abandoners` — ranks members by club reads abandoned, with abandonment rate.
 - `/abandoned` — ranks club books by how many members abandoned them.
 
-All report commands handle re-runs of `/club-start` correctly — a member who has a `finished` log for a book is never double-counted as also `reading` it.
+All report commands handle re-runs of `/club-start` correctly — a member who has a `finished` log for a book is never double-counted as also `reading` it. Historical reads can be imported as `dnr` (did not read) for members who were enrolled in a club month but never started the book.
 
 ### Admin web panel
 A browser-based admin interface at `http://localhost:3000` (or your deployed URL). Login is via Discord OAuth2 — only members with an admin role in the server are granted access. Admins can:
@@ -70,7 +71,8 @@ The bot pings members who haven't logged progress on the current month's Book of
 ### Reports
 | Command | Description |
 |---|---|
-| `/stats [user]` | Personal reading summary — progress bars for current reads, this year vs all-time counts, total pages, avg rating, favourite genre, longest book finished, and a separate BOTM breakdown with completion streak |
+| `/stats [user]` | Personal reading summary — progress bars for current reads, this year vs all-time counts, total pages, avg rating, favourite genre, longest book finished, BOTM breakdown with completion streak, and a BOTM history grid (months × years) |
+| `/club-stats <year> [user]` | BOTM participation for a year — one field per user showing all 12 months with ✅ 💀 ❌ ➖ |
 | `/leaderboard [year]` | Club read completion ranking; year shows a month-by-month grid |
 | `/finishers [year]` | Members ranked by club reads completed |
 | `/abandoners [year]` | Members ranked by club reads abandoned |

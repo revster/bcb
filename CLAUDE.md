@@ -86,7 +86,8 @@ Each file exports `{ data, execute }` — `data` is a `SlashCommandBuilder` and 
 | `/rate <rating>` | Rates the book 1–5 stars (decimals allowed). Works at any status (reading, finished, abandoned). Posts rating in thread and, if a club read, in the epilogue thread. |
 | `/abandon` | Marks the book as abandoned at current progress. Shows `✗` in `#progress`. |
 | `/club-start <url> [month] [year]` | Admin. Designates a book as the active club read. Always creates threads for all registered members and opens an epilogue thread. If `month` and `year` are provided, applies the "Bot" and "Book of the Month" tags and the book counts as an official BOTM in all reports. Without month/year, only the "Bot" tag is applied and the book is excluded from BOTM stats (threads and progress tracking still work normally). Both or neither must be supplied — providing only one is rejected. |
-| `/stats [user]` | Personal reading summary. Defaults to caller; pass a user to look up someone else. Sections: currently reading (mini progress bars), this year vs all-time finished/reading/abandoned counts, total pages, avg rating, favourite genre, longest book finished, and two BOTM subsections (This Year and All Time) with completion rate, avg rating, and longest streak. Only club books with both month and year set count as BOTM. Deduplicates by bookId using status priority: finished > reading > abandoned. Streak groups books by month/year — finishing any one book in a shared month keeps the streak alive. |
+| `/stats [user]` | Personal reading summary. Defaults to caller; pass a user to look up someone else. Sections: currently reading (mini progress bars), this year vs all-time finished/reading/abandoned counts, total pages, avg rating, favourite genre, longest book finished, two BOTM subsections (This Year and All Time) with completion rate, avg rating, and longest streak, and a `📅 BOTM History` grid (months as rows, years as columns, ASCII symbols). Only club books with both month and year set count as BOTM. Deduplicates by bookId using status priority: finished > reading > abandoned > dnr. Streak groups books by month/year — finishing any one book in a shared month keeps the streak alive. |
+| `/club-stats <year> [user]` | Admin. BOTM participation for a given year. Year is required. One embed field per user (or just the specified user), showing all 12 months in two rows of 6. Emojis: ✅ finished, 💀 abandoned, ❌ DNR, ➖ not in club / no data. Users sorted by finished count desc, then name asc. |
 | `/leaderboard [year]` | Without year: ranked list of members by total BOTM completions (all time). With year: monospace grid of members × months showing who finished each club read. |
 | `/finishers [year]` | Ranks members by number of club reads completed. Shows finished count, enrolled count, completion rate. Optional year filter. Competition ranking (1,1,3). |
 | `/abandoners [year]` | Ranks members by number of club reads abandoned. Shows abandoned count, enrolled count, abandonment rate. Optional year filter. Competition ranking. |
@@ -126,7 +127,7 @@ if (!log) {
 
 ### Report deduplication logic
 
-`/club-start` re-runs create a new `ReadingLog` with `status='reading'` for the same book. All report commands handle this by grouping logs per `userId:bookId` and applying status priority: **finished > reading > abandoned**. A book counts as finished if *any* log for that user+book has `status='finished'`, regardless of log order. This prevents phantom inflation of reading/abandoned counts from re-run threads.
+`/club-start` re-runs create a new `ReadingLog` with `status='reading'` for the same book. All report commands handle this by grouping logs per `userId:bookId` and applying status priority: **finished > reading > abandoned > dnr**. A book counts as finished if *any* log for that user+book has `status='finished'`, regardless of log order. This prevents phantom inflation of reading/abandoned counts from re-run threads.
 
 ### Admin website (`website/`)
 
@@ -173,7 +174,7 @@ rm -f dev.db && npx drizzle-kit push
 |---|---|
 | `Book` | Canonical book record scraped from Goodreads. `genres` stored as a JSON string. |
 | `MemberChannel` | Maps a Discord user (`userId`, snowflake string) to their personal forum channel (`channelId`). Set by `/register`. Both fields are unique. |
-| `ReadingLog` | One entry per member per book thread. `threadId` is unique and routes `/progress`, `/rate`, `/abandon`. Fields: `progress` (real 0–100), `rating` (real? 1–5), `status` (`"reading"` \| `"finished"` \| `"abandoned"`), `startedAt`, `finishedAt`. Multiple logs per user+book are allowed (re-reads). |
+| `ReadingLog` | One entry per member per book thread. `threadId` is unique and routes `/progress`, `/rate`, `/abandon`. Fields: `progress` (real 0–100), `rating` (real? 1–5), `status` (`"reading"` \| `"finished"` \| `"abandoned"` \| `"dnr"`), `startedAt`, `finishedAt`. Multiple logs per user+book are allowed (re-reads). `"dnr"` (did not read) is set by import scripts for historical BOTM books a member was enrolled in but never started. |
 | `ClubBook` | Marks a book as a club read. Stores `progressMessageId` and `progressBarsMessageId` (the two `#progress` messages), `epilogueThreadId`, and optional `month`/`year` for display. |
 | `User` | Known Discord users. Upserted on every command interaction. Used by report commands to resolve display names. |
 | `Setting` | Key/value store. Used for `reminders_enabled` flag. |
