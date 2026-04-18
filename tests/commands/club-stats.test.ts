@@ -23,7 +23,7 @@ const { execute } = require('../../commands/club-stats');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function makeInteraction({ user = null as any, year = null as number | null } = {}) {
+function makeInteraction({ user = null as any, year = 2025 } = {}) {
   return {
     options: {
       getUser:    jest.fn().mockReturnValue(user),
@@ -70,17 +70,7 @@ afterEach(() => { mockAll.mockReset(); jest.clearAllMocks(); });
 // ── Empty states ──────────────────────────────────────────────────────────────
 
 describe('empty states', () => {
-  test('no club books at all → no-data message', async () => {
-    mockAll
-      .mockReturnValueOnce([]) // club books
-      .mockReturnValueOnce([]); // logs
-    const interaction = makeInteraction();
-    await execute(interaction);
-
-    expect(getReplyContent(interaction)).toContain('No BOTM data found.');
-  });
-
-  test('no club books for specified year → year-specific no-data message', async () => {
+  test('no club books for year → year-specific no-data message', async () => {
     mockAll.mockReturnValueOnce([]);
     const interaction = makeInteraction({ year: 2025 });
     await execute(interaction);
@@ -98,7 +88,7 @@ describe('empty states', () => {
     expect(getReplyContent(interaction)).toContain('No participation data found.');
   });
 
-  test('user specified with no logs (no year) → no-participation message', async () => {
+  test('user specified with no logs → field with all ➖', async () => {
     mockAll
       .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
       .mockReturnValueOnce([]);
@@ -106,14 +96,57 @@ describe('empty states', () => {
     const interaction = makeInteraction({ user: makeUser('u1', 'alice') });
     await execute(interaction);
 
-    expect(getReplyContent(interaction)).toContain('No BOTM participation found');
+    const field = getField(getEmbed(interaction), 'alice');
+    expect(field).toBeDefined();
+    expect(field.value).toContain('➖');
+    expect(field.value).not.toContain('✅');
   });
 });
 
-// ── Symbols ───────────────────────────────────────────────────────────────────
+// ── Emojis ────────────────────────────────────────────────────────────────────
 
-describe('symbols', () => {
-  test('finished shows ✓', async () => {
+describe('emojis', () => {
+  test('finished shows ✅ in the correct month', async () => {
+    mockAll
+      .mockReturnValueOnce([makeClubBook(1, 1, 2025)])  // January
+      .mockReturnValueOnce([makeLog('u1', 1, 'finished')]);
+    resolveUsernames.mockResolvedValue({ u1: 'alice' });
+
+    const interaction = makeInteraction({ year: 2025 });
+    await execute(interaction);
+
+    const field = getField(getEmbed(interaction), 'alice');
+    expect(field.value).toContain('Jan ✅');
+  });
+
+  test('dnr shows ❌ in the correct month', async () => {
+    mockAll
+      .mockReturnValueOnce([makeClubBook(1, 3, 2025)])  // March
+      .mockReturnValueOnce([makeLog('u1', 1, 'dnr')]);
+    resolveUsernames.mockResolvedValue({ u1: 'alice' });
+
+    const interaction = makeInteraction({ year: 2025 });
+    await execute(interaction);
+
+    const field = getField(getEmbed(interaction), 'alice');
+    expect(field.value).toContain('Mar ❌');
+  });
+
+  test('abandoned shows 💀 in the correct month', async () => {
+    mockAll
+      .mockReturnValueOnce([makeClubBook(1, 6, 2025)])  // June
+      .mockReturnValueOnce([makeLog('u1', 1, 'abandoned')]);
+    resolveUsernames.mockResolvedValue({ u1: 'alice' });
+
+    const interaction = makeInteraction({ year: 2025 });
+    await execute(interaction);
+
+    const field = getField(getEmbed(interaction), 'alice');
+    expect(field.value).toContain('Jun 💀');
+  });
+
+  test('month with no BOTM book shows ➖', async () => {
+    // Only January has a BOTM — February should show ➖
     mockAll
       .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
       .mockReturnValueOnce([makeLog('u1', 1, 'finished')]);
@@ -122,58 +155,11 @@ describe('symbols', () => {
     const interaction = makeInteraction({ year: 2025 });
     await execute(interaction);
 
-    expect(getEmbed(interaction).data.description).toContain('✓');
+    const field = getField(getEmbed(interaction), 'alice');
+    expect(field.value).toContain('Feb ➖');
   });
 
-  test('dnr shows X', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
-      .mockReturnValueOnce([makeLog('u1', 1, 'dnr')]);
-    resolveUsernames.mockResolvedValue({ u1: 'alice' });
-
-    const interaction = makeInteraction({ year: 2025 });
-    await execute(interaction);
-
-    expect(getEmbed(interaction).data.description).toContain('X');
-  });
-
-  test('abandoned shows A', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
-      .mockReturnValueOnce([makeLog('u1', 1, 'abandoned')]);
-    resolveUsernames.mockResolvedValue({ u1: 'alice' });
-
-    const interaction = makeInteraction({ year: 2025 });
-    await execute(interaction);
-
-    expect(getEmbed(interaction).data.description).toContain('A');
-  });
-
-  test('reading shows ?', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
-      .mockReturnValueOnce([makeLog('u1', 1, 'reading')]);
-    resolveUsernames.mockResolvedValue({ u1: 'alice' });
-
-    const interaction = makeInteraction({ year: 2025 });
-    await execute(interaction);
-
-    expect(getEmbed(interaction).data.description).toContain('?');
-  });
-
-  test('no log shows . (not in club)', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2025), makeClubBook(2, 2, 2025)])
-      .mockReturnValueOnce([makeLog('u1', 1, 'finished')]); // u1 has no log for book 2
-    resolveUsernames.mockResolvedValue({ u1: 'alice' });
-
-    const interaction = makeInteraction({ year: 2025 });
-    await execute(interaction);
-
-    expect(getEmbed(interaction).data.description).toContain('.');
-  });
-
-  test('legend contains all four symbols', async () => {
+  test('legend contains all four emojis', async () => {
     mockAll
       .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
       .mockReturnValueOnce([makeLog('u1', 1, 'finished')]);
@@ -183,19 +169,14 @@ describe('symbols', () => {
     await execute(interaction);
 
     const desc = getEmbed(interaction).data.description;
-    expect(desc).toContain('✓');
-    expect(desc).toContain('X');
-    expect(desc).toContain('A');
-    expect(desc).toContain('.');
+    expect(desc).toContain('✅');
+    expect(desc).toContain('💀');
+    expect(desc).toContain('❌');
+    expect(desc).toContain('➖');
   });
 });
 
 // ── Deduplication ─────────────────────────────────────────────────────────────
-
-/** Extract just the monospace grid from a description (strips legend and fences). */
-function getGrid(desc: string): string {
-  return desc.match(/```\n([\s\S]*?)\n```/)?.[1] ?? '';
-}
 
 describe('deduplication (multiple logs per user+book)', () => {
   test('finished beats dnr', async () => {
@@ -207,9 +188,9 @@ describe('deduplication (multiple logs per user+book)', () => {
     const interaction = makeInteraction({ year: 2025 });
     await execute(interaction);
 
-    const grid = getGrid(getEmbed(interaction).data.description);
-    expect(grid).toContain('✓');
-    expect(grid).not.toContain('X');
+    const field = getField(getEmbed(interaction), 'alice');
+    expect(field.value).toContain('Jan ✅');
+    expect(field.value).not.toContain('Jan ❌');
   });
 
   test('finished beats abandoned', async () => {
@@ -221,9 +202,9 @@ describe('deduplication (multiple logs per user+book)', () => {
     const interaction = makeInteraction({ year: 2025 });
     await execute(interaction);
 
-    const grid = getGrid(getEmbed(interaction).data.description);
-    expect(grid).toContain('✓');
-    expect(grid).not.toContain('A');
+    const field = getField(getEmbed(interaction), 'alice');
+    expect(field.value).toContain('Jan ✅');
+    expect(field.value).not.toContain('Jan 💀');
   });
 
   test('abandoned beats dnr', async () => {
@@ -235,15 +216,15 @@ describe('deduplication (multiple logs per user+book)', () => {
     const interaction = makeInteraction({ year: 2025 });
     await execute(interaction);
 
-    const grid = getGrid(getEmbed(interaction).data.description);
-    expect(grid).toContain('A');
-    expect(grid).not.toContain('X');
+    const field = getField(getEmbed(interaction), 'alice');
+    expect(field.value).toContain('Jan 💀');
+    expect(field.value).not.toContain('Jan ❌');
   });
 });
 
-// ── Year filter ───────────────────────────────────────────────────────────────
+// ── Year only (all users) ─────────────────────────────────────────────────────
 
-describe('year filter only', () => {
+describe('year only (all users)', () => {
   test('title includes the year', async () => {
     mockAll
       .mockReturnValueOnce([makeClubBook(1, 3, 2025)])
@@ -256,7 +237,25 @@ describe('year filter only', () => {
     expect(getEmbed(interaction).data.title).toContain('2025');
   });
 
-  test('grid is in a code block', async () => {
+  test('one field per user', async () => {
+    mockAll
+      .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
+      .mockReturnValueOnce([
+        makeLog('u1', 1, 'finished'),
+        makeLog('u2', 1, 'dnr'),
+      ]);
+    resolveUsernames.mockResolvedValue({ u1: 'alice', u2: 'bob' });
+
+    const interaction = makeInteraction({ year: 2025 });
+    await execute(interaction);
+
+    const fields = getEmbed(interaction).data.fields;
+    expect(fields).toHaveLength(2);
+    expect(fields.map((f: any) => f.name)).toContain('alice');
+    expect(fields.map((f: any) => f.name)).toContain('bob');
+  });
+
+  test('field value has two rows split at month 6', async () => {
     mockAll
       .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
       .mockReturnValueOnce([makeLog('u1', 1, 'finished')]);
@@ -265,22 +264,13 @@ describe('year filter only', () => {
     const interaction = makeInteraction({ year: 2025 });
     await execute(interaction);
 
-    const desc = getEmbed(interaction).data.description;
-    expect(desc).toMatch(/```/);
-  });
-
-  test('header shows month abbreviations for club books in that year', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2025), makeClubBook(2, 6, 2025)])
-      .mockReturnValueOnce([makeLog('u1', 1, 'finished')]);
-    resolveUsernames.mockResolvedValue({ u1: 'alice' });
-
-    const interaction = makeInteraction({ year: 2025 });
-    await execute(interaction);
-
-    const desc = getEmbed(interaction).data.description;
-    expect(desc).toContain('Ja');
-    expect(desc).toContain('Jn');
+    const field = getField(getEmbed(interaction), 'alice');
+    const lines = field.value.split('\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain('Jan');
+    expect(lines[0]).toContain('Jun');
+    expect(lines[1]).toContain('Jul');
+    expect(lines[1]).toContain('Dec');
   });
 
   test('users sorted by finished count descending', async () => {
@@ -296,106 +286,34 @@ describe('year filter only', () => {
     const interaction = makeInteraction({ year: 2025 });
     await execute(interaction);
 
-    const desc = getEmbed(interaction).data.description;
-    expect(desc.indexOf('bob')).toBeLessThan(desc.indexOf('alice'));
+    const fields = getEmbed(interaction).data.fields;
+    const names = fields.map((f: any) => f.name);
+    expect(names.indexOf('bob')).toBeLessThan(names.indexOf('alice'));
   });
 
-  test('all four symbols can appear in the same grid', async () => {
+  test('all four emojis can appear in the same field', async () => {
     mockAll
       .mockReturnValueOnce([
         makeClubBook(1, 1, 2025),
         makeClubBook(2, 2, 2025),
         makeClubBook(3, 3, 2025),
-        makeClubBook(4, 4, 2025),
+        // month 4 has no BOTM → ➖
       ])
       .mockReturnValueOnce([
         makeLog('u1', 1, 'finished'),
         makeLog('u1', 2, 'abandoned'),
         makeLog('u1', 3, 'dnr'),
-        // u1 has no log for book 4 → .
       ]);
     resolveUsernames.mockResolvedValue({ u1: 'alice' });
 
     const interaction = makeInteraction({ year: 2025 });
     await execute(interaction);
 
-    const desc = getEmbed(interaction).data.description;
-    expect(desc).toContain('✓');
-    expect(desc).toContain('A');
-    expect(desc).toContain('X');
-    expect(desc).toContain('.');
-  });
-});
-
-// ── User filter (all years) ───────────────────────────────────────────────────
-
-describe('user filter only', () => {
-  test('title includes the user\'s name', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
-      .mockReturnValueOnce([makeLog('u1', 1, 'finished')]);
-    resolveUsernames.mockResolvedValue({ u1: 'alice' });
-
-    const interaction = makeInteraction({ user: makeUser('u1', 'alice') });
-    await execute(interaction);
-
-    expect(getEmbed(interaction).data.title).toContain('alice');
-  });
-
-  test('grid is in a code block in description', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
-      .mockReturnValueOnce([makeLog('u1', 1, 'finished')]);
-    resolveUsernames.mockResolvedValue({ u1: 'alice' });
-
-    const interaction = makeInteraction({ user: makeUser('u1', 'alice') });
-    await execute(interaction);
-
-    const desc = getEmbed(interaction).data.description;
-    expect(desc).toMatch(/```/);
-  });
-
-  test('years with no logs for the user are skipped', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2024), makeClubBook(2, 1, 2025)])
-      .mockReturnValueOnce([makeLog('u1', 2, 'finished')]); // only 2025
-    resolveUsernames.mockResolvedValue({ u1: 'alice' });
-
-    const interaction = makeInteraction({ user: makeUser('u1', 'alice') });
-    await execute(interaction);
-
-    const desc = getEmbed(interaction).data.description;
-    expect(desc).toContain('2025');
-    expect(desc).not.toContain('2024');
-  });
-
-  test('shows year label for each year the user participated in', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2024), makeClubBook(2, 1, 2025)])
-      .mockReturnValueOnce([
-        makeLog('u1', 1, 'finished'),
-        makeLog('u1', 2, 'finished'),
-      ]);
-    resolveUsernames.mockResolvedValue({ u1: 'alice' });
-
-    const interaction = makeInteraction({ user: makeUser('u1', 'alice') });
-    await execute(interaction);
-
-    const desc = getEmbed(interaction).data.description;
-    expect(desc).toContain('2024');
-    expect(desc).toContain('2025');
-  });
-
-  test('user with no logs at all → no-participation message', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
-      .mockReturnValueOnce([]);
-    resolveUsernames.mockResolvedValue({});
-
-    const interaction = makeInteraction({ user: makeUser('u1', 'alice') });
-    await execute(interaction);
-
-    expect(getReplyContent(interaction)).toBeTruthy();
+    const value = getField(getEmbed(interaction), 'alice').value;
+    expect(value).toContain('✅');
+    expect(value).toContain('💀');
+    expect(value).toContain('❌');
+    expect(value).toContain('➖');
   });
 });
 
@@ -416,7 +334,7 @@ describe('user + year', () => {
     expect(title).toContain('2025');
   });
 
-  test('grid is in description as a code block', async () => {
+  test('one field for that user only', async () => {
     mockAll
       .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
       .mockReturnValueOnce([makeLog('u1', 1, 'finished')]);
@@ -425,119 +343,21 @@ describe('user + year', () => {
     const interaction = makeInteraction({ user: makeUser('u1', 'alice'), year: 2025 });
     await execute(interaction);
 
-    const desc = getEmbed(interaction).data.description;
-    expect(desc).toMatch(/```/);
+    const fields = getEmbed(interaction).data.fields;
+    expect(fields).toHaveLength(1);
+    expect(fields[0].name).toBe('alice');
   });
 
-  test('shows correct symbol for the user', async () => {
+  test('shows correct emoji for the user', async () => {
     mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
+      .mockReturnValueOnce([makeClubBook(1, 4, 2025)])  // April
       .mockReturnValueOnce([makeLog('u1', 1, 'abandoned')]);
     resolveUsernames.mockResolvedValue({ u1: 'alice' });
 
     const interaction = makeInteraction({ user: makeUser('u1', 'alice'), year: 2025 });
     await execute(interaction);
 
-    expect(getEmbed(interaction).data.description).toContain('A');
-  });
-});
-
-// ── All time (no args) ────────────────────────────────────────────────────────
-
-describe('all time (no args)', () => {
-  test('title says All Time', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
-      .mockReturnValueOnce([makeLog('u1', 1, 'finished')]);
-    resolveUsernames.mockResolvedValue({ u1: 'alice' });
-
-    const interaction = makeInteraction();
-    await execute(interaction);
-
-    expect(getEmbed(interaction).data.title).toContain('All Time');
-  });
-
-  test('one embed field per year', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2024), makeClubBook(2, 1, 2025)])
-      .mockReturnValueOnce([
-        makeLog('u1', 1, 'finished'),
-        makeLog('u1', 2, 'finished'),
-      ]);
-    resolveUsernames.mockResolvedValue({ u1: 'alice' });
-
-    const interaction = makeInteraction();
-    await execute(interaction);
-
-    const fields = getEmbed(interaction).data.fields;
-    expect(fields).toHaveLength(2);
-    expect(fields.map((f: any) => f.name)).toContain('2024');
-    expect(fields.map((f: any) => f.name)).toContain('2025');
-  });
-
-  test('each year field contains a code block', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
-      .mockReturnValueOnce([makeLog('u1', 1, 'finished')]);
-    resolveUsernames.mockResolvedValue({ u1: 'alice' });
-
-    const interaction = makeInteraction();
-    await execute(interaction);
-
-    const field = getField(getEmbed(interaction), '2025');
-    expect(field.value).toMatch(/```/);
-  });
-
-  test('users with no logs in a given year are excluded from that year\'s field', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2024), makeClubBook(2, 1, 2025)])
-      .mockReturnValueOnce([
-        makeLog('u1', 1, 'finished'), // only in 2024
-        makeLog('u2', 2, 'finished'), // only in 2025
-      ]);
-    resolveUsernames.mockResolvedValue({ u1: 'alice', u2: 'bob' });
-
-    const interaction = makeInteraction();
-    await execute(interaction);
-
-    const field2024 = getField(getEmbed(interaction), '2024');
-    const field2025 = getField(getEmbed(interaction), '2025');
-    expect(field2024.value).toContain('alice');
-    expect(field2024.value).not.toContain('bob');
-    expect(field2025.value).toContain('bob');
-    expect(field2025.value).not.toContain('alice');
-  });
-
-  test('users sorted by total finished count descending within each year', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2025), makeClubBook(2, 2, 2025)])
-      .mockReturnValueOnce([
-        makeLog('u1', 1, 'finished'),
-        makeLog('u2', 1, 'finished'),
-        makeLog('u2', 2, 'finished'),
-      ]);
-    resolveUsernames.mockResolvedValue({ u1: 'alice', u2: 'bob' });
-
-    const interaction = makeInteraction();
-    await execute(interaction);
-
-    const field = getField(getEmbed(interaction), '2025');
-    expect(field.value.indexOf('bob')).toBeLessThan(field.value.indexOf('alice'));
-  });
-
-  test('legend is shown in description', async () => {
-    mockAll
-      .mockReturnValueOnce([makeClubBook(1, 1, 2025)])
-      .mockReturnValueOnce([makeLog('u1', 1, 'finished')]);
-    resolveUsernames.mockResolvedValue({ u1: 'alice' });
-
-    const interaction = makeInteraction();
-    await execute(interaction);
-
-    const desc = getEmbed(interaction).data.description;
-    expect(desc).toContain('✓');
-    expect(desc).toContain('X');
-    expect(desc).toContain('A');
-    expect(desc).toContain('.');
+    const field = getField(getEmbed(interaction), 'alice');
+    expect(field.value).toContain('Apr 💀');
   });
 });

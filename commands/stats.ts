@@ -18,7 +18,58 @@ import { readingLogs, clubBooks } from '../schema';
 import type { LogWithBook } from '../schema';
 
 const BAR_LENGTH = 15;
-const TITLE_MAX = 25;
+const TITLE_MAX  = 25;
+
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function botmSymbolFor(status: string | undefined): string {
+  switch (status) {
+    case 'finished':  return '✓';
+    case 'abandoned': return 'A';
+    case 'dnr':       return 'X';
+    default:          return '.';
+  }
+}
+
+/**
+ * Monospace grid: months as rows, years as columns.
+ * Only renders months that have at least one BOTM entry across any year.
+ * Returns null if there are no BOTM books.
+ */
+function buildParticipationGrid(
+  clubBookRows: Array<{ bookId: number; month: number | null; year: number | null }>,
+  statusByBotmBookId: Map<number, string>,
+): string | null {
+  const botmBooks = clubBookRows.filter(cb => cb.month !== null && cb.year !== null);
+  if (!botmBooks.length) return null;
+
+  const years        = [...new Set(botmBooks.map(cb => cb.year!))].sort((a, b) => a - b);
+  const activeMonths = [...new Set(botmBooks.map(cb => cb.month!))].sort((a, b) => a - b);
+
+  // year → month → bookId
+  const yearMonthMap = new Map<number, Map<number, number>>();
+  for (const cb of botmBooks) {
+    if (!yearMonthMap.has(cb.year!)) yearMonthMap.set(cb.year!, new Map());
+    yearMonthMap.get(cb.year!)!.set(cb.month!, cb.bookId);
+  }
+
+  const COL   = 5; // chars per year column
+  const LABEL = 5; // chars for month label ("Jan  ")
+
+  const header = ' '.repeat(LABEL) + years.map(y => String(y).padStart(COL)).join('');
+  const rows   = activeMonths.map(m => {
+    const label = MONTH_ABBR[m - 1].padEnd(LABEL);
+    const cells = years.map(y => {
+      const bookId = yearMonthMap.get(y)?.get(m);
+      const symbol = bookId !== undefined ? botmSymbolFor(statusByBotmBookId.get(bookId)) : '.';
+      return symbol.padStart(COL);
+    });
+    return label + cells.join('');
+  });
+
+  return [header, ...rows].join('\n');
+}
 
 function buildBar(pct: number): string {
   const filled = Math.round((Math.min(pct, 100) / 100) * BAR_LENGTH);
@@ -264,6 +315,12 @@ async function buildStatsEmbed(userId: string, displayName: string): Promise<Emb
     if (longestStreak > 0) lines.push(`🔥 Longest streak: **${longestStreak}** month${longestStreak !== 1 ? 's' : ''}`);
     if (clubAvgRating) lines.push(`Avg rating: ${clubAvgRating} ⭐`);
     embed.addFields({ name: '🏆 Book of the Month — All Time', value: lines.join('\n') });
+
+    // Participation grid: months as rows, years as columns
+    const grid = buildParticipationGrid(clubBookRows, statusByBotmBookId);
+    if (grid) {
+      embed.addFields({ name: '📅 BOTM History', value: '```\n' + grid + '\n```' });
+    }
   }
 
   return embed;

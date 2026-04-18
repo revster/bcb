@@ -1,18 +1,12 @@
 /**
- * commands/club-stats.ts — /club-stats [user] [year]
+ * commands/club-stats.ts — /club-stats <year> [user]
  *
- * BOTM participation grid. Symbols:
- *   ✓  finished
- *   X  did not read (enrolled, never started)
- *   A  abandoned (started but didn't finish)
- *   ?  currently reading
- *   .  not in club that month
+ * BOTM participation for a given year. One embed field per user.
+ * Emojis: ✅ finished  💀 abandoned  ❌ DNR  ➖ not in club / no data
  *
  * Cases:
- *   no args       → all users, all years (one embed field per year)
- *   year only     → all users for that year (one grid)
- *   user only     → that user, all years (one block per year)
- *   user + year   → that user, that year (one grid)
+ *   year only     → all users for that year (one field per user)
+ *   user + year   → that user for that year (one field)
  */
 
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder } from 'discord.js';
@@ -21,16 +15,15 @@ import db = require('../db');
 import { clubBooks, readingLogs } from '../schema';
 import { resolveUsernames } from '../lib/resolveUsernames';
 
-const MONTH_ABBR = ['Ja', 'Fe', 'Mr', 'Ap', 'My', 'Jn',
-                    'Jl', 'Au', 'Se', 'Oc', 'No', 'De'];
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-function symbolFor(status: string | undefined): string {
+function emojiFor(status: string | undefined): string {
   switch (status) {
-    case 'finished':  return '✓';
-    case 'abandoned': return 'A';
-    case 'dnr':       return 'X';
-    case 'reading':   return '?';
-    default:          return '.';
+    case 'finished':  return '✅';
+    case 'abandoned': return '💀';
+    case 'dnr':       return '❌';
+    default:          return '➖';
   }
 }
 
@@ -44,68 +37,27 @@ function effectiveStatus(statuses: string[]): string {
 
 type ClubBookRow = { bookId: number; month: number | null; year: number | null };
 
-function groupByYear(cbs: ClubBookRow[]): Map<number, ClubBookRow[]> {
-  const map = new Map<number, ClubBookRow[]>();
-  for (const cb of cbs) {
-    const y = cb.year!;
-    if (!map.has(y)) map.set(y, []);
-    map.get(y)!.push(cb);
-  }
-  return map;
-}
-
 /**
- * Multi-user grid for a single year's books.
- * Returns raw monospace text (no code fences).
+ * Builds the two-row field value for a single user's participation in a year.
+ * All 12 months are shown; months with no BOTM entry or no user log show ➖.
  */
-function buildYearGrid(
-  yearBooks: ClubBookRow[],
-  userIds: string[],
-  statusMap: Map<string, string>,
-  usernameMap: Record<string, string>,
-): string {
-  const months     = yearBooks.map(cb => MONTH_ABBR[(cb.month ?? 1) - 1]);
-  const maxNameLen = Math.max(...userIds.map(id => (usernameMap[id] ?? id).length), 4);
-  const pad        = (s: string, w: number) => s.padEnd(w);
-
-  const header = pad('', maxNameLen + 2) + months.map(m => `|${m} `).join('') + '|';
-  const sep    = '─'.repeat(header.length);
-
-  const rows = userIds.map(uid => {
-    const name  = usernameMap[uid] ?? uid;
-    const cells = yearBooks.map(cb => `| ${symbolFor(statusMap.get(`${uid}:${cb.bookId}`))} `);
-    return pad(name, maxNameLen + 2) + cells.join('') + '|';
-  });
-
-  return [header, sep, ...rows].join('\n');
-}
-
-/**
- * Single-user grid across all years.
- * Each year renders as two lines: month header + symbol row.
- * Years where the user has no logs at all are skipped.
- */
-function buildUserGrid(
-  booksByYear: Map<number, ClubBookRow[]>,
+function buildUserFieldValue(
+  allClubBooks: ClubBookRow[],
   userId: string,
   statusMap: Map<string, string>,
 ): string {
-  const years    = [...booksByYear.keys()].sort((a, b) => a - b);
-  const sections: string[] = [];
-
-  for (const year of years) {
-    const yearBooks = booksByYear.get(year)!;
-
-    // Skip years where this user has no log of any kind
-    if (!yearBooks.some(cb => statusMap.has(`${userId}:${cb.bookId}`))) continue;
-
-    const months  = yearBooks.map(cb => MONTH_ABBR[(cb.month ?? 1) - 1]);
-    const header  = String(year).padEnd(6) + months.map(m => `|${m} `).join('') + '|';
-    const symbols = ' '.repeat(6) + yearBooks.map(cb => `| ${symbolFor(statusMap.get(`${userId}:${cb.bookId}`))} `).join('') + '|';
-    sections.push(header + '\n' + symbols);
+  const monthToBookId = new Map<number, number>();
+  for (const cb of allClubBooks) {
+    monthToBookId.set(cb.month!, cb.bookId);
   }
 
-  return sections.join('\n\n');
+  const cells = MONTH_NAMES.map((name, i) => {
+    const bookId = monthToBookId.get(i + 1);
+    const status = bookId !== undefined ? statusMap.get(`${userId}:${bookId}`) : undefined;
+    return `${name} ${emojiFor(status)}`;
+  });
+
+  return cells.slice(0, 6).join(' · ') + '\n' + cells.slice(6).join(' · ');
 }
 
 // ─── Command ─────────────────────────────────────────────────────────────────
@@ -113,38 +65,31 @@ function buildUserGrid(
 export const data = new SlashCommandBuilder()
   .setName('club-stats')
   .setDescription('Show who read, skipped, or abandoned each Book of the Month')
+  .addIntegerOption(o =>
+    o.setName('year').setDescription('Year to display').setMinValue(2020).setRequired(true)
+  )
   .addUserOption(o =>
     o.setName('user').setDescription('Member to look up (defaults to all members)')
-  )
-  .addIntegerOption(o =>
-    o.setName('year').setDescription('Filter to a specific year (defaults to all years)').setMinValue(2020)
   );
 
 export async function execute(interaction: ChatInputCommandInteraction): Promise<void> {
+  const year       = interaction.options.getInteger('year', true);
   const targetUser = interaction.options.getUser('user');
-  const year       = interaction.options.getInteger('year');
   const userId     = targetUser?.id ?? null;
 
   await interaction.deferReply();
 
-  // ── Fetch club books ──────────────────────────────────────────────────────
+  // ── Fetch club books for this year ────────────────────────────────────────
 
-  const allClubBooks: ClubBookRow[] = year
-    ? db.select({ bookId: clubBooks.bookId, month: clubBooks.month, year: clubBooks.year })
-        .from(clubBooks)
-        .where(and(eq(clubBooks.year, year), isNotNull(clubBooks.month)))
-        .orderBy(asc(clubBooks.month))
-        .all()
-    : db.select({ bookId: clubBooks.bookId, month: clubBooks.month, year: clubBooks.year })
-        .from(clubBooks)
-        .where(and(isNotNull(clubBooks.month), isNotNull(clubBooks.year)))
-        .orderBy(asc(clubBooks.year), asc(clubBooks.month))
-        .all();
+  const allClubBooks: ClubBookRow[] = db
+    .select({ bookId: clubBooks.bookId, month: clubBooks.month, year: clubBooks.year })
+    .from(clubBooks)
+    .where(and(eq(clubBooks.year, year), isNotNull(clubBooks.month)))
+    .orderBy(asc(clubBooks.month))
+    .all();
 
   if (!allClubBooks.length) {
-    await interaction.editReply({
-      content: year ? `No BOTM data found for ${year}.` : 'No BOTM data found.',
-    });
+    await interaction.editReply({ content: `No BOTM data found for ${year}.` });
     return;
   }
 
@@ -199,54 +144,20 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
 
   // ── Build embed ───────────────────────────────────────────────────────────
 
-  const legend = '`✓` read  `X` DNR  `A` abandoned  `.` not in club';
-  const embed  = new EmbedBuilder();
+  const legend = '✅ read  💀 abandoned  ❌ DNR  ➖ not in club';
+  const displayName = targetUser ? (targetUser.displayName ?? targetUser.username) : null;
 
-  if (userId) {
-    const displayName = targetUser!.displayName ?? targetUser!.username;
+  const embed = new EmbedBuilder()
+    .setTitle(displayName
+      ? `📊 ${displayName}'s ${year} Club Reads`
+      : `📊 Club Read Participation — ${year}`)
+    .setDescription(legend);
 
-    if (year) {
-      // Single user, single year
-      const grid = buildYearGrid(allClubBooks, [userId], statusMap, usernameMap);
-      embed
-        .setTitle(`📊 ${displayName}'s ${year} Club Reads`)
-        .setDescription(legend + '\n```\n' + grid + '\n```');
-    } else {
-      // Single user, all years
-      const booksByYear = groupByYear(allClubBooks);
-      const grid = buildUserGrid(booksByYear, userId, statusMap);
-      if (!grid) {
-        await interaction.editReply({ content: `No BOTM participation found for **${displayName}**.` });
-        return;
-      }
-      embed
-        .setTitle(`📊 ${displayName}'s Club Read History`)
-        .setDescription(legend + '\n```\n' + grid + '\n```');
-    }
-  } else {
-    if (year) {
-      // All users, single year
-      const grid = buildYearGrid(allClubBooks, sortedUserIds, statusMap, usernameMap);
-      embed
-        .setTitle(`📊 Club Read Participation — ${year}`)
-        .setDescription(legend + '\n```\n' + grid + '\n```');
-    } else {
-      // All users, all years — one field per year
-      embed.setTitle('📊 Club Read Participation — All Time').setDescription(legend);
-
-      const booksByYear = groupByYear(allClubBooks);
-      const years = [...booksByYear.keys()].sort((a, b) => a - b);
-
-      for (const y of years) {
-        const yearBooks    = booksByYear.get(y)!;
-        const yearUserIds  = sortedUserIds.filter(uid =>
-          yearBooks.some(cb => statusMap.has(`${uid}:${cb.bookId}`))
-        );
-        if (!yearUserIds.length) continue;
-        const grid = buildYearGrid(yearBooks, yearUserIds, statusMap, usernameMap);
-        embed.addFields({ name: String(y), value: '```\n' + grid + '\n```' });
-      }
-    }
+  for (const uid of sortedUserIds) {
+    embed.addFields({
+      name:  usernameMap[uid] ?? uid,
+      value: buildUserFieldValue(allClubBooks, uid, statusMap),
+    });
   }
 
   await interaction.editReply({ embeds: [embed] });

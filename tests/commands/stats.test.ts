@@ -732,6 +732,138 @@ describe('/stats execute', () => {
   });
 });
 
+// ── BOTM participation grid ───────────────────────────────────────────────────
+
+describe('BOTM participation grid', () => {
+  test('grid field present when user has club logs', async () => {
+    mockFindMany.mockResolvedValue([makeLog(1, 'finished')]);
+    mockAll.mockReturnValue([makeClubBook(1, { month: 1, year: 2025 })]);
+    const interaction = makeInteraction();
+    await execute(interaction);
+
+    expect(getField(getEmbed(interaction), '📅 BOTM History')).toBeDefined();
+  });
+
+  test('grid field absent when user has no club logs', async () => {
+    mockFindMany.mockResolvedValue([makeLog(1, 'finished')]);
+    mockAll.mockReturnValue([]);
+    const interaction = makeInteraction();
+    await execute(interaction);
+
+    expect(getField(getEmbed(interaction), '📅 BOTM History')).toBeUndefined();
+  });
+
+  test('grid field is a code block', async () => {
+    mockFindMany.mockResolvedValue([makeLog(1, 'finished')]);
+    mockAll.mockReturnValue([makeClubBook(1, { month: 1, year: 2025 })]);
+    const interaction = makeInteraction();
+    await execute(interaction);
+
+    const field = getField(getEmbed(interaction), '📅 BOTM History');
+    expect(field.value).toMatch(/^```\n[\s\S]+\n```$/);
+  });
+
+  test('year shown as column header', async () => {
+    mockFindMany.mockResolvedValue([makeLog(1, 'finished')]);
+    mockAll.mockReturnValue([makeClubBook(1, { month: 1, year: 2025 })]);
+    const interaction = makeInteraction();
+    await execute(interaction);
+
+    const field = getField(getEmbed(interaction), '📅 BOTM History');
+    expect(field.value).toContain('2025');
+  });
+
+  test('month shown as row label', async () => {
+    mockFindMany.mockResolvedValue([makeLog(1, 'finished')]);
+    mockAll.mockReturnValue([makeClubBook(1, { month: 3, year: 2025 })]);  // March
+    const interaction = makeInteraction();
+    await execute(interaction);
+
+    const field = getField(getEmbed(interaction), '📅 BOTM History');
+    expect(field.value).toContain('Mar');
+  });
+
+  test('finished shows ✓', async () => {
+    mockFindMany.mockResolvedValue([makeLog(1, 'finished')]);
+    mockAll.mockReturnValue([makeClubBook(1, { month: 1, year: 2025 })]);
+    const interaction = makeInteraction();
+    await execute(interaction);
+
+    const field = getField(getEmbed(interaction), '📅 BOTM History');
+    expect(field.value).toContain('✓');
+  });
+
+  test('abandoned shows A', async () => {
+    mockFindMany.mockResolvedValue([makeLog(1, 'abandoned')]);
+    mockAll.mockReturnValue([makeClubBook(1, { month: 1, year: 2025 })]);
+    const interaction = makeInteraction();
+    await execute(interaction);
+
+    const field = getField(getEmbed(interaction), '📅 BOTM History');
+    expect(field.value).toContain('A');
+  });
+
+  test('dnr shows X', async () => {
+    mockFindMany.mockResolvedValue([makeLog(1, 'dnr')]);
+    mockAll.mockReturnValue([makeClubBook(1, { month: 1, year: 2025 })]);
+    const interaction = makeInteraction();
+    await execute(interaction);
+
+    const field = getField(getEmbed(interaction), '📅 BOTM History');
+    expect(field.value).toContain('X');
+  });
+
+  test('no user log for a BOTM month shows .', async () => {
+    // User has a log for book 1 (Jan) but not book 2 (Feb)
+    mockFindMany.mockResolvedValue([makeLog(1, 'finished')]);
+    mockAll.mockReturnValue([
+      makeClubBook(1, { month: 1, year: 2025 }),
+      makeClubBook(2, { month: 2, year: 2025 }),
+    ]);
+    const interaction = makeInteraction();
+    await execute(interaction);
+
+    const field = getField(getEmbed(interaction), '📅 BOTM History');
+    expect(field.value).toContain('.');
+  });
+
+  test('multiple years each get their own column', async () => {
+    mockFindMany.mockResolvedValue([
+      makeLog(1, 'finished'),
+      makeLog(2, 'dnr'),
+    ]);
+    mockAll.mockReturnValue([
+      makeClubBook(1, { month: 1, year: 2024 }),
+      makeClubBook(2, { month: 1, year: 2025 }),
+    ]);
+    const interaction = makeInteraction();
+    await execute(interaction);
+
+    const field = getField(getEmbed(interaction), '📅 BOTM History');
+    expect(field.value).toContain('2024');
+    expect(field.value).toContain('2025');
+  });
+
+  test('only months with BOTM entries appear as rows', async () => {
+    // Only January and March have BOTM entries — February should not appear
+    mockFindMany.mockResolvedValue([
+      makeLog(1, 'finished'),
+      makeLog(2, 'finished'),
+    ]);
+    mockAll.mockReturnValue([
+      makeClubBook(1, { month: 1, year: 2025 }),
+      makeClubBook(2, { month: 3, year: 2025 }),
+    ]);
+    const interaction = makeInteraction();
+    await execute(interaction);
+
+    const field = getField(getEmbed(interaction), '📅 BOTM History');
+    expect(field.value).toContain('Jan');
+    expect(field.value).toContain('Mar');
+    expect(field.value).not.toContain('Feb');
+  });
+});
+
 // ── Non-BOTM club reads ───────────────────────────────────────────────────────
 
 describe('non-BOTM club reads (no month/year)', () => {
