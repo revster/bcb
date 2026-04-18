@@ -1,12 +1,9 @@
 /**
- * deploy-admin-commands.ts — Register all bot commands, with report commands
- * restricted to admins only.
+ * deploy-admin-commands.ts — Register a subset of commands, all admin-only.
+ * Use this before public launch.
  *
- * Admin-only (visible to all but restricted by default_member_permissions):
- *   /stats, /leaderboard
- *
- * Unrestricted admin commands:
- *   /register, /unregister, /checkup, /test
+ * Registered (all restricted to admins via default_member_permissions):
+ *   /register, /unregister, /checkup, /test, /stats, /leaderboard, /club-stats
  *
  * Run with: npx tsx deploy-admin-commands.ts
  */
