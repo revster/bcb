@@ -1,0 +1,90 @@
+<%- include('../partials/head', { title: detail.book.title, appName: "Hermione's Army" }) %>
+<%- include('../partials/user-nav') %>
+
+<div class="container">
+  <div class="book-detail-hero">
+    <% if (detail.book.imageUrl) { %>
+      <img src="<%= detail.book.imageUrl %>" class="book-detail-cover" alt="" />
+    <% } %>
+    <div class="book-detail-info">
+      <h1><%= detail.book.title %></h1>
+      <div class="book-detail-author"><%= detail.book.author %></div>
+      <% if (detail.isBotm) { %>
+        <div class="book-detail-badge">
+          📅 Book of the Month
+          <% const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; %>
+          <%= monthNames[(detail.botmMonth || 1) - 1] %> <%= detail.botmYear %>
+        </div>
+      <% } %>
+      <div class="highlights-grid" style="margin-top:1rem">
+        <div class="highlight-card">
+          <div class="highlight-value"><%= detail.finishers %></div>
+          <div class="highlight-label">Finishers</div>
+        </div>
+        <div class="highlight-card">
+          <div class="highlight-value"><%= detail.enrolled %></div>
+          <div class="highlight-label">Enrolled</div>
+        </div>
+        <div class="highlight-card">
+          <div class="highlight-value">
+            <% if (detail.enrolled > 0) { %><%= Math.round(detail.finishers / detail.enrolled * 100) %>%<% } else { %>—<% } %>
+          </div>
+          <div class="highlight-label">Finish Rate</div>
+        </div>
+        <div class="highlight-card">
+          <div class="highlight-value"><%= detail.avgRating !== null ? detail.avgRating.toFixed(1) + ' ★' : '—' %></div>
+          <div class="highlight-label">Avg Rating</div>
+        </div>
+      </div>
+      <% if (detail.book.pages) { %>
+        <div class="book-detail-meta"><%= detail.book.pages %> pages</div>
+      <% } %>
+      <% if (detail.book.goodreadsUrl) { %>
+        <div class="book-detail-meta"><a href="<%= detail.book.goodreadsUrl %>" target="_blank" rel="noopener">View on Goodreads ↗</a></div>
+      <% } %>
+    </div>
+  </div>
+
+  <% if (detail.members.length) { %>
+  <div class="stats-section">
+    <h2>Members</h2>
+    <div class="table-wrap">
+      <table id="members-table">
+        <thead>
+          <tr>
+            <th>Member</th>
+            <th>Status</th>
+            <th>Progress</th>
+            <th>Rating</th>
+            <th>Started</th>
+            <th>Finished</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% for (const m of detail.members) { %>
+          <tr>
+            <td><a href="/u/<%= m.userId %>"><%= m.displayName %></a></td>
+            <td>
+              <% if (m.status === 'finished') { %>✅ Finished
+              <% } else if (m.status === 'reading') { %>📖 Reading
+              <% } else if (m.status === 'abandoned') { %>💀 Abandoned
+              <% } else { %>❌ DNR<% } %>
+            </td>
+            <td><%= m.progress.toFixed(0) %>%</td>
+            <td><%= m.rating !== null ? m.rating.toFixed(1) + ' ★' : '—' %></td>
+            <td><%= m.startedAt ? new Date(m.startedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—' %></td>
+            <td><%= m.finishedAt ? new Date(m.finishedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—' %></td>
+          </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <% } else { %>
+    <p class="empty-state">No reading logs for this book yet.</p>
+  <% } %>
+
+</div>
+
+</body>
+</html>

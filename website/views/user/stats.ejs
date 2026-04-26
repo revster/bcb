@@ -1,4 +1,4 @@
-<%- include('../partials/head', { title: 'My Stats', appName: 'BCB' }) %>
+<%- include('../partials/head', { title: 'My Stats', appName: "Hermione's Army" }) %>
 <%- include('../partials/user-nav') %>
 
 <%
@@ -27,14 +27,12 @@ function pct(n) {
   <div class="user-hero">
     <img src="<%= avatarUrl %>" class="user-avatar" alt="" />
     <div class="user-hero-info">
-      <h1><%= user.globalName || user.username %></h1>
+      <h1><%= displayName %></h1>
       <% if (stats && stats.memberSince) { %>
         <p class="user-since">Reading since <%= fmtMonth(stats.memberSince) %></p>
       <% } %>
     </div>
-    <% if (user.isAdmin) { %>
-      <a href="/admin" class="btn btn-secondary">Admin Dashboard</a>
-    <% } %>
+
   </div>
 
   <% if (!stats) { %>
@@ -42,7 +40,11 @@ function pct(n) {
   <div class="empty-hero">
     <div class="empty-hero-icon">📚</div>
     <h2>No reading history yet</h2>
-    <p>Use <code>/read</code> in Discord to start tracking your first book.</p>
+    <% if (isOwnProfile) { %>
+      <p>Use <code>/read</code> in Discord to start tracking your first book.</p>
+    <% } else { %>
+      <p><%= displayName %> hasn't tracked any books yet.</p>
+    <% } %>
   </div>
 
   <% } else { %>
@@ -117,7 +119,7 @@ function pct(n) {
           <div class="book-cover-sm book-cover-placeholder"></div>
         <% } %>
         <div class="reading-info">
-          <div class="reading-title"><%= log.book.title %></div>
+          <div class="reading-title"><a href="/book/<%= log.book.id %>"><%= log.book.title %></a></div>
           <div class="reading-author"><%= log.book.author %></div>
           <div class="reading-progress-row">
             <div class="progress-bar-wrap">
@@ -155,7 +157,7 @@ function pct(n) {
         <div class="highlight-icon">📏</div>
         <div class="highlight-value"><%= stats.longestBook.book.pages?.toLocaleString() %> pages</div>
         <div class="highlight-label">Longest Finished</div>
-        <div class="highlight-sub"><%= stats.longestBook.book.title %></div>
+        <div class="highlight-sub"><a href="/book/<%= stats.longestBook.book.id %>"><%= stats.longestBook.book.title %></a></div>
       </div>
       <% } %>
       <% if (stats.highestRated) { %>
@@ -163,7 +165,7 @@ function pct(n) {
         <div class="highlight-icon">⭐</div>
         <div class="highlight-value"><%= stars(stats.highestRated.rating) %></div>
         <div class="highlight-label">Highest Rated</div>
-        <div class="highlight-sub"><%= stats.highestRated.book.title %></div>
+        <div class="highlight-sub"><a href="/book/<%= stats.highestRated.book.id %>"><%= stats.highestRated.book.title %></a></div>
       </div>
       <% } %>
       <% if (stats.mostRecentFinish) { %>
@@ -171,7 +173,7 @@ function pct(n) {
         <div class="highlight-icon">✅</div>
         <div class="highlight-value"><%= fmtMonth(stats.mostRecentFinish.finishedAt) %></div>
         <div class="highlight-label">Most Recent Finish</div>
-        <div class="highlight-sub"><%= stats.mostRecentFinish.book.title %></div>
+        <div class="highlight-sub"><a href="/book/<%= stats.mostRecentFinish.book.id %>"><%= stats.mostRecentFinish.book.title %></a></div>
       </div>
       <% } %>
     </div>
@@ -336,7 +338,7 @@ function pct(n) {
               <% } %>
             </td>
             <td>
-              <div class="book-title"><%= log.book.title %></div>
+              <div class="book-title"><a href="/book/<%= log.book.id %>"><%= log.book.title %></a></div>
               <div class="book-author"><%= log.book.author %></div>
             </td>
             <td>

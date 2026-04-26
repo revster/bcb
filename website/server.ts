@@ -10,7 +10,8 @@ const path       = require('path');
 const authRoutes   = require('./routes/auth');
 const adminRoutes  = require('./routes/admin');
 const apiRoutes    = require('./routes/api');
-const userRoutes   = require('./routes/user');
+const userRoutes      = require('./routes/user');
+const clubStatsRoutes = require('./routes/clubStats');
 const requireAdmin = require('./middleware/requireAdmin');
 const csrf         = require('./middleware/csrf');
 
@@ -84,6 +85,7 @@ app.get('/', (req: any, res: any) => {
 });
 
 app.use('/', userRoutes);
+app.use('/', clubStatsRoutes);
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

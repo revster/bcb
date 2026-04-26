@@ -1,0 +1,138 @@
+<%- include('../partials/head', { title: 'Club Stats', appName: "Hermione's Army" }) %>
+<%- include('../partials/user-nav') %>
+
+<div class="container">
+  <div class="page-header">
+    <h1>Club Stats</h1>
+  </div>
+
+  <!-- Overview cards -->
+  <div class="highlights-grid" style="margin-bottom:2.5rem">
+    <div class="highlight-card">
+      <div class="highlight-value"><%= overview.totalFinished %></div>
+      <div class="highlight-label">Total Finishes</div>
+    </div>
+    <div class="highlight-card">
+      <div class="highlight-value"><%= overview.uniqueBooksRead %></div>
+      <div class="highlight-label">Unique Books</div>
+    </div>
+    <div class="highlight-card">
+      <div class="highlight-value"><%= overview.activeMembers %></div>
+      <div class="highlight-label">Members</div>
+    </div>
+    <div class="highlight-card">
+      <div class="highlight-value"><%= overview.currentlyReadingCount %></div>
+      <div class="highlight-label">Currently Reading</div>
+    </div>
+  </div>
+
+  <!-- Currently reading -->
+  <% if (overview.currentlyReading.length) { %>
+  <div class="stats-section">
+    <h2>Currently Reading</h2>
+    <div class="reading-list">
+      <% for (const entry of overview.currentlyReading) { %>
+      <div class="reading-item">
+        <% if (entry.book.imageUrl) { %>
+          <img src="<%= entry.book.imageUrl %>" class="book-thumb" alt="" />
+        <% } %>
+        <div class="reading-item-info">
+          <div class="reading-item-title"><a href="/book/<%= entry.book.id %>"><%= entry.book.title %></a></div>
+          <div class="reading-item-meta"><%= entry.book.author %></div>
+          <div class="reading-item-meta"><a href="/u/<%= entry.userId %>"><%= entry.displayName %></a></div>
+          <div class="progress-bar-wrap">
+            <div class="progress-bar-fill" style="width:<%= entry.progress %>%"></div>
+          </div>
+          <div class="reading-item-meta"><%= entry.progress.toFixed(0) %>%</div>
+        </div>
+      </div>
+      <% } %>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- BOTM by year -->
+  <% if (overview.botmByYear.length) { %>
+  <div class="stats-section">
+    <h2>Book of the Month by Year</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Year</th>
+            <th>Books</th>
+            <th>Avg Enrolled</th>
+            <th>Avg Finish Rate</th>
+            <th>Avg Rating</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% for (const row of overview.botmByYear) { %>
+          <tr>
+            <td><strong><%= row.year %></strong></td>
+            <td><%= row.books %></td>
+            <td><%= row.avgEnrolled %></td>
+            <td><%= row.avgRate %>%</td>
+            <td><%= row.avgRating !== null ? row.avgRating.toFixed(1) + ' ★' : '—' %></td>
+          </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Most-read books -->
+  <% if (overview.mostReadBooks.length) { %>
+  <div class="stats-section">
+    <h2>Most-Read Books</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Book</th>
+            <th>Author</th>
+            <th>Finishers</th>
+            <th>Avg Rating</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% for (const entry of overview.mostReadBooks) { %>
+          <tr>
+            <td><a href="/book/<%= entry.book.id %>"><%= entry.book.title %></a></td>
+            <td><%= entry.book.author %></td>
+            <td><%= entry.finishers %></td>
+            <td><%= entry.avgRating !== null ? entry.avgRating.toFixed(1) + ' ★' : '—' %></td>
+          </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Top genres -->
+  <% if (overview.topGenres.length) { %>
+  <div class="stats-section">
+    <h2>Top Genres</h2>
+    <%
+    const maxGenreCount = overview.topGenres[0]?.count || 1;
+    %>
+    <div class="genre-list">
+      <% for (const g of overview.topGenres) { %>
+      <div class="genre-row">
+        <span class="genre-label"><%= g.genre %></span>
+        <div class="genre-bar-wrap">
+          <div class="genre-bar" style="width:<%= Math.round((g.count / maxGenreCount) * 100) %>%"></div>
+        </div>
+        <span class="genre-count"><%= g.count %></span>
+      </div>
+      <% } %>
+    </div>
+  </div>
+  <% } %>
+
+</div>
+
+</body>
+</html>

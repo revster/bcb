@@ -27,7 +27,7 @@ A Discord bot for managing a book club server. Core features:
 - `features/typescript` — full TypeScript migration (merged into main via features/drizzle)
 - `features/drizzle` — Prisma → Drizzle ORM migration, TypeScript, enhanced /stats, BOTM vs club read distinction, seed script (merged into main)
 - `features/websiteImprovements` — /checkup command, multi-book-month streak fix, login page cleanup (merged into main)
-- `features/websiteStats` — user stats page at `/me` for all guild members; auth updated to allow any guild member to log in; admin role stored in session (merged into main)
+- `features/websiteStats` — user stats page at `/me`, public member profiles at `/u/:userId`, club leaderboard at `/leaderboard`, club-wide stats at `/club`, book detail at `/book/:bookId`; auth updated to allow any guild member to log in; branding updated to Hermione's Army; mobile-responsive nav with hamburger menu (merged into main)
 
 **The `dev.db` file is not tracked by git.** To recreate it from scratch: `rm -f dev.db && npx drizzle-kit push`. Schema is defined in `schema.ts`.
 
@@ -140,7 +140,8 @@ An Express 5 + EJS web panel. Started with `npm run website` (port 3000 by defau
 - `website/routes/auth.ts` — Discord OAuth2 flow (`/auth/discord` → callback → session), logout
 - `website/routes/admin.ts` — HTML pages: dashboard, log list (with member/status filter), create/edit/delete log
 - `website/routes/api.ts` — JSON API: `/api/books/scrape` (Goodreads lookup — validates URL against `GOODREADS_BOOK_RE` before scraping to prevent SSRF), `/api/members`, `/api/logs`
-- `website/routes/user.ts` — `GET /me` — personal stats page for any logged-in guild member
+- `website/routes/user.ts` — `GET /me` (own stats), `GET /u/:userId` (public member profile)
+- `website/routes/clubStats.ts` — `GET /leaderboard` (year filter via `?year=`), `GET /club` (club overview), `GET /book/:bookId` (book detail with per-member status)
 
 **Middleware:**
 - `website/middleware/requireAdmin.ts` — redirects to `/auth/login` if no session user or `user.isAdmin !== true`; sets `res.locals.user`
@@ -151,9 +152,18 @@ An Express 5 + EJS web panel. Started with `npm run website` (port 3000 by defau
 
 **User stats page (`/me`):** Queries all reading logs for the logged-in user via `website/lib/userStats.ts` (`computeUserStats(userId)`), which returns a structured `UserStats` object used by `website/views/user/stats.ejs`. Sections: currently reading (CSS progress bars), overview stat cards (this year / all time toggle), highlights (favourite genre, longest book, highest rated, most recent finish), BOTM participation grid (HTML table with coloured status cells), genre breakdown (CSS horizontal bars), and a filterable reading history table.
 
+**Public member profile (`/u/:userId`):** Same template as `/me` but resolves display name from DB and sets `isOwnProfile: false`. Returns 404 if the userId has no record in `users` or `memberChannels`.
+
+**Club stats pages (`website/lib/clubStats.ts`):**
+- `GET /leaderboard` — all members ranked by BOTM completions. Accepts `?year=` query param for server-side filtering. Rendered by `website/views/stats/leaderboard.ejs`.
+- `GET /club` — aggregate club overview: stat cards, currently reading list, BOTM-by-year table, most-read books, top genres. Rendered by `website/views/stats/club.ejs`.
+- `GET /book/:bookId` — book detail with cover, BOTM badge, aggregate stats, and per-member status table. Rendered by `website/views/stats/book.ejs`.
+
+**Mobile nav:** Both `nav.ejs` (admin) and `user-nav.ejs` (members) include a hamburger button (`#navHamburger`) that toggles `.nav-open` on `#navLinks`. The dropdown is `position: absolute; top: 52px` so it overlays content without affecting the nav bar height. Theme toggle is duplicated in the mobile dropdown (`#themeToggleMobile`).
+
 **CSP note:** Helmet sets `script-src-attr 'none'` by default, which blocks all inline `onclick`/`onchange` attributes. All event handlers in EJS templates must be wired with `addEventListener` in `<script>` blocks — never use inline handlers.
 
-**Views:** EJS templates in `website/views/`. Partials: `head.ejs` (applies saved dark/light theme before render to prevent flash), `nav.ejs` (includes theme toggle script). Dark mode is toggled via `data-theme="dark"` on `<html>` and persisted in `localStorage`.
+**Views:** EJS templates in `website/views/`. Partials: `head.ejs` (applies saved dark/light theme before render to prevent flash), `nav.ejs` / `user-nav.ejs` (include theme toggle and hamburger scripts). Dark mode is toggled via `data-theme="dark"` on `<html>` and persisted in `localStorage`.
 
 ### Voting system
 

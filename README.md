@@ -38,9 +38,17 @@ A suite of commands for reviewing reading history across the club:
 All report commands handle re-runs of `/club-start` correctly — a member who has a `finished` log for a book is never double-counted as also `reading` it. Historical reads can be imported as `dnr` (did not read) for members who were enrolled in a club month but never started the book.
 
 ### Web panel
-A browser-based interface at `http://localhost:3000` (or your deployed URL). Login is via Discord OAuth2 for any guild member.
+A browser-based interface at `http://localhost:3000` (or your deployed URL). Login is via Discord OAuth2 — any guild member can sign in. The site is mobile-responsive with a hamburger nav on small screens and dark mode support.
 
-**Member stats page (`/me`)** — every guild member can log in to see their personal reading stats: currently reading progress bars, this-year vs all-time counts, pages read, avg rating, favourite genre, highlights (longest book, highest rated, most recent finish), a BOTM participation grid, genre breakdown bars, and a filterable reading history table.
+**My Stats (`/me`)** — personal reading stats: currently reading progress bars, this-year vs all-time counts, pages read, avg rating, favourite genre, highlights (longest book, highest rated, most recent finish), a BOTM participation grid with colour-coded cells, genre breakdown bars, and a filterable reading history table.
+
+**Member profiles (`/u/:userId`)** — same stats view for any other member, linked from leaderboard and book detail pages.
+
+**Leaderboard (`/leaderboard`)** — all members ranked by BOTM completions with an optional year filter.
+
+**Club Stats (`/club`)** — club-wide overview: total finishes, unique books, currently reading list, BOTM-by-year summary table, most-read books (2+ finishers), and top genres.
+
+**Book detail (`/book/:bookId`)** — cover, BOTM badge, aggregate stats, and a per-member status table showing who finished, is reading, or abandoned the book.
 
 **Admin panel (`/admin`)** — restricted to members with an admin role. Admins can:
 
