@@ -12,7 +12,7 @@
  *   5. Creates or refreshes the two #progress messages (embed + bars).
  */
 
-import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, PermissionFlagsBits, ForumChannel } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, ForumChannel } from 'discord.js';
 import { eq, and, isNotNull, inArray } from 'drizzle-orm';
 import db = require('../db');
 import { books, clubBooks, memberChannels, readingLogs } from '../schema';
@@ -33,7 +33,6 @@ const MONTHS = [
 export const data = new SlashCommandBuilder()
   .setName('club-start')
   .setDescription('Mark a book as the active club read — creates threads for all registered members')
-  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addStringOption(o =>
     o.setName('url').setDescription('Goodreads book URL').setRequired(true)
   )
