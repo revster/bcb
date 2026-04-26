@@ -50,4 +50,22 @@ async function isAdmin(userId: string): Promise<boolean> {
   return member.roles.some((id: string) => adminRoleIds.has(id));
 }
 
-module.exports = { getDiscordUser, isAdmin };
+/**
+ * Returns guild membership and admin status in a single pair of API calls.
+ */
+async function checkMembership(userId: string): Promise<{ inGuild: boolean; isAdmin: boolean }> {
+  const [member, allRoles] = await Promise.all([
+    getGuildMember(userId),
+    getGuildRoles(),
+  ]);
+  if (!member) return { inGuild: false, isAdmin: false };
+  const adminRoleIds = new Set(
+    allRoles.filter((r: DiscordRole) => getAdminRoleNames().includes(r.name)).map((r: DiscordRole) => r.id)
+  );
+  return {
+    inGuild: true,
+    isAdmin: member.roles.some((id: string) => adminRoleIds.has(id)),
+  };
+}
+
+module.exports = { getDiscordUser, isAdmin, checkMembership };

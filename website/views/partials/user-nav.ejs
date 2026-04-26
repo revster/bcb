@@ -1,14 +1,17 @@
 <nav>
-  <div class="nav-brand">📚 BCB Admin</div>
+  <div class="nav-brand">📚 BCB</div>
   <div class="nav-links">
-    <a href="/admin">Dashboard</a>
-    <a href="/admin/logs">Reading Logs</a>
-    <a href="/admin/logs/new" class="btn-sm">+ Add Log</a>
-    <a href="/admin/quips">Quips</a>
     <a href="/me">My Stats</a>
+    <% if (user.isAdmin) { %>
+      <a href="/admin">Admin</a>
+    <% } %>
   </div>
   <div class="nav-user">
     <button type="button" id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode"></button>
+    <% if (user.avatar) { %>
+      <img src="https://cdn.discordapp.com/avatars/<%= user.id %>/<%= user.avatar %>.png?size=32"
+           class="nav-avatar" alt="" />
+    <% } %>
     <span><%= user.globalName || user.username %></span>
     <form method="POST" action="/auth/logout" style="display:contents">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">

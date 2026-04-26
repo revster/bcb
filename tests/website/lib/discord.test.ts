@@ -1,4 +1,4 @@
-const { isAdmin } = require('../../../website/lib/discord');
+const { isAdmin, checkMembership } = require('../../../website/lib/discord');
 
 // isAdmin calls getGuildMember (fetch call 0) and getGuildRoles (fetch call 1) in parallel
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -76,5 +76,34 @@ describe('isAdmin', () => {
       { ok: false, status: 500, json: () => Promise.resolve(null) }
     );
     await expect(isAdmin('user-6')).rejects.toThrow('Failed to fetch guild roles');
+  });
+});
+
+describe('checkMembership', () => {
+  test('returns inGuild:true and isAdmin:true for an admin guild member', async () => {
+    mockFetch(
+      jsonResponse({ roles: ['role-admin'] }),
+      jsonResponse(ALL_ROLES)
+    );
+    const result = await checkMembership('user-1');
+    expect(result).toEqual({ inGuild: true, isAdmin: true });
+  });
+
+  test('returns inGuild:true and isAdmin:false for a non-admin guild member', async () => {
+    mockFetch(
+      jsonResponse({ roles: ['role-member'] }),
+      jsonResponse(ALL_ROLES)
+    );
+    const result = await checkMembership('user-2');
+    expect(result).toEqual({ inGuild: true, isAdmin: false });
+  });
+
+  test('returns inGuild:false and isAdmin:false when user is not in the guild', async () => {
+    mockFetch(
+      { ok: false, status: 404, json: () => Promise.resolve(null) },
+      jsonResponse(ALL_ROLES)
+    );
+    const result = await checkMembership('user-3');
+    expect(result).toEqual({ inGuild: false, isAdmin: false });
   });
 });
