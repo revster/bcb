@@ -11,13 +11,13 @@
  * Re-running /read for the same book starts a new log (useful for re-reads).
  */
 
-import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, ForumChannel } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, ForumChannel, TextChannel } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import db = require('../db');
-import { memberChannels, books, readingLogs } from '../schema';
+import { memberChannels, books, readingLogs, clubBooks } from '../schema';
 import scrapeBook from '../lib/scrapeBook';
 import { buildBookEmbed } from '../lib/buildBookEmbed';
-import { updateProgressPost } from '../lib/progressPost';
+import { updateProgressPost, buildBar } from '../lib/progressPost';
 import { botLog } from '../lib/botLog';
 
 const GOODREADS_BOOK_RE = /^https:\/\/(www\.)?goodreads\.com\/book\/show\//;
@@ -89,7 +89,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   // Create the thread in the member's forum channel, applying the Bot tag if it exists
   const botTagId = forumChannel.availableTags?.find(t => t.name === 'Bot')?.id;
   const thread = await forumChannel.threads.create({
-    name: `${title} by ${author}`,
+    name: `${title} by ${author}`.slice(0, 100),
     message: { embeds: [embed] },
     ...(botTagId ? { appliedTags: [botTagId] } : {}),
   });
@@ -100,9 +100,23 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
     bookId: book.id,
     threadId: thread.id,
   }).run();
+  const log = db.select().from(readingLogs).where(eq(readingLogs.threadId, thread.id)).get()!;
 
   await interaction.editReply(`Your thread for **${title}** is live! [Jump to thread](${thread.url})`);
   await botLog(interaction.guild!, `[read] ${interaction.user.username} started **${title}** by ${author}`);
 
   await updateProgressPost(book.id, interaction.guild!);
+
+  // For personal books (not a club read), post an initial 0% entry to #progress
+  const clubBook = db.select().from(clubBooks).where(eq(clubBooks.bookId, book.id)).get();
+  if (!clubBook) {
+    const allChannels = await interaction.guild!.channels.fetch();
+    const progressChannel = allChannels.find(c => c?.name === 'progress') as TextChannel | undefined;
+    if (progressChannel) {
+      const bar = buildBar(0);
+      const content = `📖 **${interaction.user.displayName}** started reading *${title}* by ${author}\n\`${bar}  0%\``;
+      const msg = await progressChannel.send(content);
+      db.update(readingLogs).set({ progressMessageId: msg.id }).where(eq(readingLogs.id, log.id)).run();
+    }
+  }
 }

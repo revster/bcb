@@ -6,6 +6,7 @@ jest.mock('../../db', () => {
   const chain: any = {
     from:               jest.fn().mockReturnThis(),
     where:              jest.fn().mockReturnThis(),
+    set:                jest.fn().mockReturnThis(),
     values:             jest.fn().mockReturnThis(),
     onConflictDoUpdate: jest.fn().mockReturnThis(),
     returning:          jest.fn().mockReturnThis(),
@@ -15,14 +16,19 @@ jest.mock('../../db', () => {
   return {
     select: jest.fn(() => chain),
     insert: jest.fn(() => chain),
+    update: jest.fn(() => chain),
     query: {},
   };
 });
 import scrapeBook from '../../lib/scrapeBook';
 jest.mock('../../lib/scrapeBook');
-jest.mock('../../lib/progressPost', () => ({ updateProgressPost: jest.fn() }));
+jest.mock('../../lib/progressPost', () => ({
+  updateProgressPost: jest.fn(),
+  buildBar: jest.fn().mockReturnValue('░░░░░░░░░░░░░░░░░░░░'),
+}));
 jest.mock('../../lib/botLog', () => ({ botLog: jest.fn() }));
 
+const db = require('../../db');
 const { MessageFlags } = require('discord.js');
 const { execute } = require('../../commands/read');
 
@@ -38,6 +44,7 @@ const SCRAPED_BOOK = {
 const UPSERTED_BOOK = { id: 42, ...SCRAPED_BOOK, goodreadsUrl: VALID_URL };
 const MEMBER_CHANNEL = { userId: '999', channelId: 'ch-forum' };
 const THREAD = { id: 'thread-123', url: 'https://discord.com/channels/1/2/thread-123' };
+const NEW_LOG = { id: 1, userId: '999', bookId: 42, threadId: THREAD.id, progressMessageId: null };
 
 function makeForumChannel() {
   return {
@@ -46,11 +53,28 @@ function makeForumChannel() {
   };
 }
 
-function makeInteraction(url = VALID_URL, { forumChannel = makeForumChannel() } = {}) {
+function makeProgressChannel() {
+  return {
+    name: 'progress',
+    send: jest.fn().mockResolvedValue({ id: 'msg-progress-1' }),
+  };
+}
+
+function makeInteraction(url = VALID_URL, {
+  forumChannel = makeForumChannel(),
+  progressChannel = null as ReturnType<typeof makeProgressChannel> | null,
+} = {}) {
   return {
     options: { getString: jest.fn().mockReturnValue(url) },
     user: { id: '999', displayName: 'TestUser', username: 'testuser' },
-    guild: { channels: { fetch: jest.fn().mockResolvedValue(forumChannel), cache: { find: jest.fn() } } },
+    guild: {
+      channels: {
+        fetch: jest.fn().mockImplementation((id?: string) =>
+          id ? Promise.resolve(forumChannel) : Promise.resolve({ find: jest.fn().mockReturnValue(progressChannel) })
+        ),
+        cache: { find: jest.fn() },
+      },
+    },
     reply: jest.fn().mockResolvedValue(undefined),
     deferReply: jest.fn().mockResolvedValue(undefined),
     editReply: jest.fn().mockResolvedValue(undefined),
@@ -61,7 +85,11 @@ beforeEach(() => {
   mockGet.mockReturnValue(undefined);
   mockRun.mockReturnValue({ changes: 1 });
 });
-afterEach(() => jest.clearAllMocks());
+afterEach(() => {
+  mockGet.mockReset();
+  mockRun.mockReset();
+  jest.clearAllMocks();
+});
 
 describe('/read execute', () => {
   describe('URL validation', () => {
@@ -117,7 +145,9 @@ describe('/read execute', () => {
       jest.mocked(scrapeBook).mockResolvedValue(SCRAPED_BOOK);
       mockGet
         .mockReturnValueOnce(MEMBER_CHANNEL) // memberChannel lookup
-        .mockReturnValueOnce(UPSERTED_BOOK); // book upsert returning
+        .mockReturnValueOnce(UPSERTED_BOOK)  // book upsert returning
+        .mockReturnValueOnce(NEW_LOG);       // log after insert (new select by threadId)
+      // 4th call (clubBooks) falls back to default undefined → personal book, no progressChannel set
     });
 
     test('defers ephemerally', async () => {
@@ -153,6 +183,70 @@ describe('/read execute', () => {
       expect(interaction.editReply).toHaveBeenCalledWith(
         expect.stringContaining('The Great Gatsby')
       );
+      expect(interaction.editReply).toHaveBeenCalledWith(
+        expect.stringContaining(THREAD.url)
+      );
+    });
+  });
+
+  describe('#progress post on book start', () => {
+    beforeEach(() => {
+      jest.mocked(scrapeBook).mockResolvedValue(SCRAPED_BOOK);
+      mockGet
+        .mockReturnValueOnce(MEMBER_CHANNEL)
+        .mockReturnValueOnce(UPSERTED_BOOK)
+        .mockReturnValueOnce(NEW_LOG)
+        .mockReturnValueOnce(undefined); // no club book → personal book
+    });
+
+    test('posts 0% to #progress for a personal book', async () => {
+      const pc = makeProgressChannel();
+      const interaction = makeInteraction(VALID_URL, { progressChannel: pc });
+      await execute(interaction);
+
+      expect(pc.send).toHaveBeenCalledWith(
+        expect.stringContaining('started reading')
+      );
+    });
+
+    test('#progress post includes book title', async () => {
+      const pc = makeProgressChannel();
+      const interaction = makeInteraction(VALID_URL, { progressChannel: pc });
+      await execute(interaction);
+
+      expect(pc.send).toHaveBeenCalledWith(
+        expect.stringContaining('The Great Gatsby')
+      );
+    });
+
+    test('saves progressMessageId on the reading log', async () => {
+      const pc = makeProgressChannel();
+      const interaction = makeInteraction(VALID_URL, { progressChannel: pc });
+      await execute(interaction);
+
+      expect(db.update).toHaveBeenCalled();
+    });
+
+    test('does not post to #progress for a club book', async () => {
+      mockGet.mockReset();
+      mockGet
+        .mockReturnValueOnce(MEMBER_CHANNEL)
+        .mockReturnValueOnce(UPSERTED_BOOK)
+        .mockReturnValueOnce(NEW_LOG)
+        .mockReturnValueOnce({ id: 99, bookId: 42 }); // club book exists
+
+      const pc = makeProgressChannel();
+      const interaction = makeInteraction(VALID_URL, { progressChannel: pc });
+      await execute(interaction);
+
+      expect(pc.send).not.toHaveBeenCalled();
+    });
+
+    test('skips #progress post gracefully when channel not found', async () => {
+      // no progressChannel → find returns null → no post
+      const interaction = makeInteraction(VALID_URL);
+      await execute(interaction);
+
       expect(interaction.editReply).toHaveBeenCalledWith(
         expect.stringContaining(THREAD.url)
       );

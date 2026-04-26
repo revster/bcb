@@ -6,12 +6,12 @@
  * with a ✗ marker.
  */
 
-import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, ThreadChannel, ForumChannel } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags, ThreadChannel, ForumChannel, TextChannel } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import db = require('../db');
-import { readingLogs } from '../schema';
+import { readingLogs, clubBooks } from '../schema';
 import { buildBookEmbed } from '../lib/buildBookEmbed';
-import { updateProgressPost } from '../lib/progressPost';
+import { updateProgressPost, buildBar } from '../lib/progressPost';
 import { botLog } from '../lib/botLog';
 
 export const data = new SlashCommandBuilder()
@@ -95,4 +95,26 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   await botLog(interaction.guild!, `[abandon] ${interaction.user.username} abandoned **${log.book.title}** at ${progressDisplay}`);
 
   await updateProgressPost(log.bookId, interaction.guild!);
+
+  const clubBook = db.select().from(clubBooks).where(eq(clubBooks.bookId, log.bookId)).get();
+  if (!clubBook) {
+    const allChannels = await interaction.guild!.channels.fetch();
+    const progressChannel = allChannels.find(c => c?.name === 'progress') as TextChannel | undefined;
+    if (progressChannel) {
+      const bar = buildBar(log.progress);
+      const pctStr = `${Math.round(log.progress)}%`;
+      const content = `📖 **${interaction.user.displayName}** abandoned *${log.book.title}* by ${log.book.author}\n\`${bar}  ${pctStr}  ✗\``;
+      let posted = false;
+      if (log.progressMessageId) {
+        try {
+          const msg = await progressChannel.messages.fetch(log.progressMessageId);
+          await msg.edit(content);
+          posted = true;
+        } catch { /* message deleted — fall through */ }
+      }
+      if (!posted) {
+        await progressChannel.send(content);
+      }
+    }
+  }
 }

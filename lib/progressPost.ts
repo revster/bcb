@@ -24,9 +24,9 @@ const MONTHS = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-function buildBar(pct: number): string {
-  const filled = Math.round((Math.min(pct, 100) / 100) * BAR_LENGTH);
-  return '█'.repeat(filled) + '░'.repeat(BAR_LENGTH - filled);
+export function buildBar(pct: number, length = BAR_LENGTH): string {
+  const filled = Math.round((Math.min(pct, 100) / 100) * length);
+  return '█'.repeat(filled) + '░'.repeat(length - filled);
 }
 
 export async function updateProgressPost(bookId: number, guild: Guild): Promise<void> {

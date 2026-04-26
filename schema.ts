@@ -58,8 +58,9 @@ export const readingLogs = sqliteTable('ReadingLog', {
   rating:         real('rating'),
   startedAt:      timestamp('startedAt').notNull().$defaultFn(() => new Date()),
   finishedAt:     timestamp('finishedAt'),
-  lastProgressAt: timestamp('lastProgressAt'),
-  lastRemindedAt: timestamp('lastRemindedAt'),
+  lastProgressAt:    timestamp('lastProgressAt'),
+  lastRemindedAt:    timestamp('lastRemindedAt'),
+  progressMessageId: text('progressMessageId'),
   updatedAt:      timestamp('updatedAt').notNull().$defaultFn(() => new Date()).$onUpdate(() => new Date()),
 }, (t) => [
   unique('ReadingLog_threadId_key').on(t.threadId),

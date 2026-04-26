@@ -13,11 +13,11 @@
  * Must be run from inside a bot-managed book thread owned by the user.
  */
 
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, MessageFlags, ThreadChannel, ForumChannel } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, MessageFlags, ThreadChannel, ForumChannel, TextChannel } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import db = require('../db');
 import { readingLogs, clubBooks } from '../schema';
-import { updateProgressPost } from '../lib/progressPost';
+import { updateProgressPost, buildBar } from '../lib/progressPost';
 import { botLog } from '../lib/botLog';
 
 export const data = new SlashCommandBuilder()
@@ -169,10 +169,45 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
       .where(eq(readingLogs.threadId, interaction.channelId))
       .run();
 
-    const resumedNote = wasAbandoned ? ' (resumed)' : '';
-    await channel.send(`📖 Progress updated: ${progressDisplay}${resumedNote}`);
-    await interaction.reply({ content: `Progress logged!${resumedNote}`, flags: MessageFlags.Ephemeral });
-    await botLog(interaction.guild!, `[progress] ${interaction.user.username} — **${log.book.title}**: ${progressDisplay}${resumedNote}`);
+    const verb = wasAbandoned ? 'resumed' : 'is reading';
+    const bar = buildBar(progress);
+    const pctStr = `${Math.round(progress)}%`;
+    const pageStr = page !== null && log.book.pages ? `  ·  pg ${page}/${log.book.pages}` : '';
+    const progressContent = `📖 **${interaction.user.displayName}** ${verb} *${log.book.title}* by ${log.book.author}\n\`${bar}  ${pctStr}${pageStr}\``;
+    const threadContent = `\`${bar}  ${pctStr}${pageStr}\``;
+
+    await channel.send(threadContent);
+
+    if (wasAbandoned) {
+      const abandonedTag = (channel.parent as ForumChannel | null)?.availableTags?.find(t => t.name === 'Abandoned');
+      if (abandonedTag) {
+        const currentTags = channel.appliedTags as string[] ?? [];
+        await channel.setAppliedTags(currentTags.filter(id => id !== abandonedTag.id)).catch(() => null);
+      }
+    }
+
+    const clubBook = db.select().from(clubBooks).where(eq(clubBooks.bookId, log.bookId)).get();
+    if (!clubBook) {
+      const allChannels = await interaction.guild!.channels.fetch();
+      const progressChannel = allChannels.find(c => c?.name === 'progress') as TextChannel | undefined;
+      if (progressChannel) {
+        let posted = false;
+        if (log.progressMessageId) {
+          try {
+            const msg = await progressChannel.messages.fetch(log.progressMessageId);
+            await msg.edit(progressContent);
+            posted = true;
+          } catch { /* message was deleted — fall through to send a fresh one */ }
+        }
+        if (!posted) {
+          const msg = await progressChannel.send(progressContent);
+          db.update(readingLogs).set({ progressMessageId: msg.id }).where(eq(readingLogs.id, log.id)).run();
+        }
+      }
+    }
+
+    await interaction.reply({ content: 'Progress logged!', flags: MessageFlags.Ephemeral });
+    await botLog(interaction.guild!, `[progress] ${interaction.user.username} — **${log.book.title}**: ${progressDisplay}${wasAbandoned ? ' (resumed)' : ''}`);
   }
 
   await updateProgressPost(log.bookId, interaction.guild!);
