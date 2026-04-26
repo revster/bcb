@@ -12,6 +12,8 @@ A Discord bot and admin web panel for managing a book club server. Members can t
 ### Personal reading tracker
 Each registered member has a personal forum channel. Use `/read` to start a new book thread — the bot scrapes Goodreads for metadata and creates a thread with the cover, rating, and genre info. From inside that thread, use `/progress` to log how far you've gotten and `/rate` to leave a star rating. Use `/abandon` if a book isn't working out.
 
+Personal books also appear in `#progress` with a live progress bar, so the whole club can see what everyone is reading at once. The bar is posted at 0% when you start a book and updated in-place as you log progress. Abandoning a book marks it with `✗`.
+
 ### Club read tracking
 An admin uses `/club-start` to designate the monthly pick. The bot creates a reading thread for every registered member, opens a spoiler discussion thread in `#epilogue`, and maintains a live progress board in `#progress` showing every member's reading bar at a glance. The board updates automatically as members log progress.
 
@@ -63,10 +65,10 @@ The bot pings members who haven't logged progress on the current month's Book of
 ### Member
 | Command | Description |
 |---|---|
-| `/read <url>` | Start tracking a personal book — creates a thread in your forum channel |
-| `/progress [page] [percentage]` | Log reading progress from inside your book thread |
+| `/read <url>` | Start tracking a personal book — creates a thread in your forum channel and posts an initial 0% bar to `#progress` |
+| `/progress [page] [percentage]` | Log reading progress from inside your book thread — posts a compact bar in the thread and updates your bar in `#progress` |
 | `/rate <rating>` | Rate the book 1–5 stars (decimals allowed) from inside your book thread |
-| `/abandon` | Mark the current book as abandoned |
+| `/abandon` | Mark the current book as abandoned — updates your bar in `#progress` with `✗` |
 
 ### Reports
 | Command | Description |
