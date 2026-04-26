@@ -403,14 +403,140 @@ input[type="checkbox"] { width: auto; margin-right: 0.4rem; }
 /* History table */
 .book-thumb { width: 32px; height: 48px; object-fit: cover; border-radius: 2px; display: block; }
 
+/* ── Hamburger nav ─────────────────────────────────────────────────────────── */
+.nav-hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  margin-left: auto;
+}
+.nav-hamburger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: var(--text);
+  border-radius: 2px;
+  transition: transform .2s, opacity .2s;
+}
+.nav-hamburger.nav-open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.nav-hamburger.nav-open span:nth-child(2) { opacity: 0; }
+.nav-hamburger.nav-open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+.nav-user-mobile { display: none; }
+.nav-user-desktop { display: flex; }
+
 /* ── Responsive ────────────────────────────────────────────────────────────── */
-@media (max-width: 600px) {
+@media (max-width: 680px) {
+  /* Container */
+  .container { padding: 1.25rem 1rem; }
+
+  /* Nav — hamburger mode */
+  nav {
+    padding: 0 1rem;
+    height: 52px;
+    flex-wrap: nowrap;
+    position: relative;
+  }
+  .nav-brand { flex: 1; }
+  .nav-hamburger { display: flex; }
+  .nav-user-desktop { display: none; }
+
+  /* Dropdown — absolutely positioned below nav bar */
+  .nav-links {
+    display: none;
+    position: absolute;
+    top: 52px;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 4px 12px rgba(0,0,0,.1);
+    padding: 0.25rem 1rem 0.75rem;
+    gap: 0;
+    z-index: 100;
+    /* reset base flex properties that don't apply here */
+    flex: none;
+    align-items: stretch;
+  }
+  .nav-links.nav-open { display: flex; }
+  .nav-links a {
+    padding: 0.75rem 0;
+    font-size: 0.95rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+  .nav-links a:last-of-type { border-bottom: none; }
+  .nav-links .btn-sm { display: none; } /* hide "+ Add Log" in mobile menu */
+  .nav-user-mobile {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0 0;
+    font-size: 0.875rem;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  /* Page header */
+  .page-header { flex-wrap: wrap; gap: 0.5rem; }
+  .page-header h1 { font-size: 1.2rem; }
+
+  /* Section header — let toggle wrap below heading */
+  .section-header { flex-wrap: wrap; gap: 0.5rem; }
+
+  /* Filter bar — stack selects */
+  .filter-bar { flex-direction: column; align-items: stretch; }
+  .filter-bar select { width: 100%; }
+
+  /* Hero */
   .user-hero { padding: 1.25rem; gap: 1rem; }
   .user-avatar { width: 64px; height: 64px; }
   .user-hero-info h1 { font-size: 1.35rem; }
+
+  /* Stat + highlight grids — 2 columns */
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
   .highlights-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* BOTM stat cards — full width stack */
   .botm-stats-row { flex-direction: column; }
+  .botm-stat-card { min-width: 0; }
+
+  /* Genre bar label narrower */
+  .genre-label { width: 110px; }
+
+  /* History table — hide less important columns */
+  /* col 1: thumb, 3: type, 5: progress, 7: started, 8: finished */
+  #history-table th:nth-child(1),
+  #history-table td:nth-child(1),
+  #history-table th:nth-child(3),
+  #history-table td:nth-child(3),
+  #history-table th:nth-child(5),
+  #history-table td:nth-child(5),
+  #history-table th:nth-child(7),
+  #history-table td:nth-child(7),
+  #history-table th:nth-child(8),
+  #history-table td:nth-child(8) { display: none; }
+
+  /* Leaderboard table — hide Enrolled and Rate */
+  #lb-table th:nth-child(4),
+  #lb-table td:nth-child(4),
+  #lb-table th:nth-child(5),
+  #lb-table td:nth-child(5) { display: none; }
+
+  /* Book detail member table — hide Progress, Started, Finished */
+  #members-table th:nth-child(3),
+  #members-table td:nth-child(3),
+  #members-table th:nth-child(5),
+  #members-table td:nth-child(5),
+  #members-table th:nth-child(6),
+  #members-table td:nth-child(6) { display: none; }
 }
 .book-thumb-placeholder { width: 32px; height: 48px; background: var(--border); border-radius: 2px; }
 

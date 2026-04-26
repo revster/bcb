@@ -1,13 +1,21 @@
 <nav>
   <div class="nav-brand">📚 Hermione's Army</div>
-  <div class="nav-links">
+  <div class="nav-links" id="navLinks">
     <a href="/admin">Dashboard</a>
     <a href="/admin/logs">Reading Logs</a>
     <a href="/admin/logs/new" class="btn-sm">+ Add Log</a>
     <a href="/admin/quips">Quips</a>
     <a href="/me">My Stats</a>
+    <div class="nav-user nav-user-mobile">
+      <span><%= user.globalName || user.username %></span>
+      <button type="button" id="themeToggleMobile" class="theme-toggle" aria-label="Toggle dark mode"></button>
+      <form method="POST" action="/auth/logout" style="display:contents">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="btn-logout">Log out</button>
+      </form>
+    </div>
   </div>
-  <div class="nav-user">
+  <div class="nav-user nav-user-desktop">
     <button type="button" id="themeToggle" class="theme-toggle" aria-label="Toggle dark mode"></button>
     <span><%= user.globalName || user.username %></span>
     <form method="POST" action="/auth/logout" style="display:contents">
@@ -15,19 +23,38 @@
       <button type="submit" class="btn-logout">Log out</button>
     </form>
   </div>
+  <button type="button" class="nav-hamburger" id="navHamburger" aria-label="Toggle menu">
+    <span></span><span></span><span></span>
+  </button>
 </nav>
 <script>
   (function () {
-    const btn = document.getElementById('themeToggle');
-    function updateIcon() {
-      btn.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
+    function updateIcons() {
+      const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      ['themeToggle', 'themeToggleMobile'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = dark ? '☀️' : '🌙';
+      });
     }
-    updateIcon();
-    btn.addEventListener('click', function () {
-      const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      localStorage.setItem('theme', next);
-      updateIcon();
+    function applyThemeToggle(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('click', function () {
+        const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+        updateIcons();
+      });
+    }
+    updateIcons();
+    applyThemeToggle('themeToggle');
+    applyThemeToggle('themeToggleMobile');
+
+    const hamburger = document.getElementById('navHamburger');
+    const links     = document.getElementById('navLinks');
+    hamburger.addEventListener('click', function () {
+      const open = links.classList.toggle('nav-open');
+      hamburger.classList.toggle('nav-open', open);
     });
   })();
 </script>

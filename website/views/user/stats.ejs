@@ -32,9 +32,7 @@ function pct(n) {
         <p class="user-since">Reading since <%= fmtMonth(stats.memberSince) %></p>
       <% } %>
     </div>
-    <% if (user.isAdmin) { %>
-      <a href="/admin" class="btn btn-secondary">Admin Dashboard</a>
-    <% } %>
+
   </div>
 
   <% if (!stats) { %>
