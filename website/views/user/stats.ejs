@@ -1,0 +1,439 @@
+<%- include('../partials/head', { title: 'My Stats', appName: 'BCB' }) %>
+<%- include('../partials/user-nav') %>
+
+<%
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return MONTH_NAMES[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+}
+function fmtMonth(d) {
+  if (!d) return '—';
+  return MONTH_NAMES[d.getMonth()] + ' ' + d.getFullYear();
+}
+function stars(r) {
+  if (r == null) return '—';
+  return r.toFixed(1) + ' ★';
+}
+function pct(n) {
+  return Math.round(n) + '%';
+}
+%>
+
+<div class="container">
+
+  <!-- ── Hero ──────────────────────────────────────────────────────────────── -->
+  <div class="user-hero">
+    <img src="<%= avatarUrl %>" class="user-avatar" alt="" />
+    <div class="user-hero-info">
+      <h1><%= user.globalName || user.username %></h1>
+      <% if (stats && stats.memberSince) { %>
+        <p class="user-since">Reading since <%= fmtMonth(stats.memberSince) %></p>
+      <% } %>
+    </div>
+    <% if (user.isAdmin) { %>
+      <a href="/admin" class="btn btn-secondary">Admin Dashboard</a>
+    <% } %>
+  </div>
+
+  <% if (!stats) { %>
+  <!-- ── Empty state ────────────────────────────────────────────────────────── -->
+  <div class="empty-hero">
+    <div class="empty-hero-icon">📚</div>
+    <h2>No reading history yet</h2>
+    <p>Use <code>/read</code> in Discord to start tracking your first book.</p>
+  </div>
+
+  <% } else { %>
+
+  <!-- ── Overview ──────────────────────────────────────────────────────────── -->
+  <section class="stats-section">
+    <div class="section-header">
+      <h2>Reading Overview</h2>
+      <div class="toggle-group">
+        <button id="toggle-year" class="toggle-btn active">This Year</button>
+        <button id="toggle-all"  class="toggle-btn">All Time</button>
+      </div>
+    </div>
+
+    <div id="stats-year" class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-number"><%= stats.thisYearFinished.length %></div>
+        <div class="stat-label">Finished</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number"><%= stats.thisYearReading.length %></div>
+        <div class="stat-label">Reading</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number"><%= stats.thisYearAbandoned.length %></div>
+        <div class="stat-label">Abandoned</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">
+          <%= stats.thisYearFinished.reduce((s, l) => s + (l.book.pages || 0), 0).toLocaleString() %>
+        </div>
+        <div class="stat-label">Pages Read</div>
+      </div>
+    </div>
+
+    <div id="stats-all" class="stat-grid" style="display:none">
+      <div class="stat-card">
+        <div class="stat-number"><%= stats.allFinished.length %></div>
+        <div class="stat-label">Finished</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number"><%= stats.allReading.length %></div>
+        <div class="stat-label">Reading</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number"><%= stats.allAbandoned.length %></div>
+        <div class="stat-label">Abandoned</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number"><%= stats.totalPages.toLocaleString() %></div>
+        <div class="stat-label">Pages Read</div>
+      </div>
+      <% if (stats.avgRating !== null) { %>
+      <div class="stat-card">
+        <div class="stat-number"><%= stats.avgRating.toFixed(1) %></div>
+        <div class="stat-label">Avg Rating ★</div>
+      </div>
+      <% } %>
+    </div>
+  </section>
+
+  <!-- ── Currently Reading ─────────────────────────────────────────────────── -->
+  <% if (stats.currentlyReading.length > 0) { %>
+  <section class="stats-section">
+    <h2>Currently Reading</h2>
+    <div class="reading-list">
+      <% for (const log of stats.currentlyReading) { %>
+      <div class="reading-item">
+        <% if (log.book.image) { %>
+          <img src="<%= log.book.image %>" class="book-cover-sm" alt="" />
+        <% } else { %>
+          <div class="book-cover-sm book-cover-placeholder"></div>
+        <% } %>
+        <div class="reading-info">
+          <div class="reading-title"><%= log.book.title %></div>
+          <div class="reading-author"><%= log.book.author %></div>
+          <div class="reading-progress-row">
+            <div class="progress-bar-wrap">
+              <div class="progress-bar-fill" style="width:<%= Math.min(log.progress, 100) %>%"></div>
+            </div>
+            <span class="progress-label"><%= pct(log.progress) %></span>
+          </div>
+          <% if (log.book.pages) { %>
+            <div class="reading-pages">~<%= Math.round(log.progress / 100 * log.book.pages) %> / <%= log.book.pages %> pages</div>
+          <% } %>
+        </div>
+      </div>
+      <% } %>
+    </div>
+  </section>
+  <% } %>
+
+  <!-- ── Highlights ────────────────────────────────────────────────────────── -->
+  <%
+  const hasHighlights = stats.favouriteGenre || stats.longestBook || stats.highestRated || stats.mostRecentFinish;
+  %>
+  <% if (hasHighlights) { %>
+  <section class="stats-section">
+    <h2>Highlights</h2>
+    <div class="highlights-grid">
+      <% if (stats.favouriteGenre) { %>
+      <div class="highlight-card">
+        <div class="highlight-icon">📖</div>
+        <div class="highlight-value"><%= stats.favouriteGenre %></div>
+        <div class="highlight-label">Favourite Genre</div>
+      </div>
+      <% } %>
+      <% if (stats.longestBook) { %>
+      <div class="highlight-card">
+        <div class="highlight-icon">📏</div>
+        <div class="highlight-value"><%= stats.longestBook.book.pages?.toLocaleString() %> pages</div>
+        <div class="highlight-label">Longest Finished</div>
+        <div class="highlight-sub"><%= stats.longestBook.book.title %></div>
+      </div>
+      <% } %>
+      <% if (stats.highestRated) { %>
+      <div class="highlight-card">
+        <div class="highlight-icon">⭐</div>
+        <div class="highlight-value"><%= stars(stats.highestRated.rating) %></div>
+        <div class="highlight-label">Highest Rated</div>
+        <div class="highlight-sub"><%= stats.highestRated.book.title %></div>
+      </div>
+      <% } %>
+      <% if (stats.mostRecentFinish) { %>
+      <div class="highlight-card">
+        <div class="highlight-icon">✅</div>
+        <div class="highlight-value"><%= fmtMonth(stats.mostRecentFinish.finishedAt) %></div>
+        <div class="highlight-label">Most Recent Finish</div>
+        <div class="highlight-sub"><%= stats.mostRecentFinish.book.title %></div>
+      </div>
+      <% } %>
+    </div>
+  </section>
+  <% } %>
+
+  <!-- ── Book Club (BOTM) ───────────────────────────────────────────────────── -->
+  <% if (stats.hasBotm) { %>
+  <section class="stats-section">
+    <h2>Book Club</h2>
+
+    <div class="botm-stats-row">
+      <% if (stats.botmThisYear) { %>
+      <div class="botm-stat-card">
+        <div class="botm-stat-label">This Year</div>
+        <div class="botm-stat-value">
+          <%= stats.botmThisYear.finished %>/<%= stats.botmThisYear.total %>
+          <span class="botm-rate">(<%= stats.botmThisYear.rate %>%)</span>
+        </div>
+        <div class="botm-stat-sub">finished</div>
+        <% if (stats.botmThisYear.avgRating !== null) { %>
+          <div class="botm-stat-sub"><%= stars(stats.botmThisYear.avgRating) %> avg</div>
+        <% } %>
+      </div>
+      <% } %>
+
+      <div class="botm-stat-card">
+        <div class="botm-stat-label">All Time</div>
+        <div class="botm-stat-value">
+          <%= stats.botmAllTime.finished %>/<%= stats.botmAllTime.total %>
+          <span class="botm-rate">(<%= stats.botmAllTime.rate %>%)</span>
+        </div>
+        <div class="botm-stat-sub">finished</div>
+        <% if (stats.botmAllTime.avgRating !== null) { %>
+          <div class="botm-stat-sub"><%= stars(stats.botmAllTime.avgRating) %> avg</div>
+        <% } %>
+      </div>
+
+      <% if (stats.longestStreak > 0) { %>
+      <div class="botm-stat-card botm-streak">
+        <div class="botm-stat-label">Longest Streak</div>
+        <div class="botm-stat-value"><%= stats.longestStreak %></div>
+        <div class="botm-stat-sub">consecutive month<%= stats.longestStreak !== 1 ? 's' : '' %></div>
+      </div>
+      <% } %>
+    </div>
+
+    <% if (stats.botmGrid.length > 0) { %>
+    <div class="botm-grid-wrap">
+      <table class="botm-grid">
+        <thead>
+          <tr>
+            <th class="botm-year-col">Year</th>
+            <% for (const m of MONTH_NAMES) { %><th><%= m %></th><% } %>
+          </tr>
+        </thead>
+        <tbody>
+          <% for (const row of stats.botmGrid) { %>
+          <tr>
+            <td class="botm-year-col"><%= row.year %></td>
+            <% for (const cell of row.cells) { %>
+              <% if (!cell.status) { %>
+                <td class="botm-cell botm-empty"></td>
+              <% } else { %>
+                <td class="botm-cell botm-<%= cell.status %>"
+                    title="<%= cell.bookTitle || '' %>">
+                  <% if (cell.status === 'finished')     { %>✓
+                  <% } else if (cell.status === 'reading') { %>↻
+                  <% } else if (cell.status === 'abandoned') { %>✗
+                  <% } else if (cell.status === 'dnr') { %>—
+                  <% } else { %> <% } %>
+                </td>
+              <% } %>
+            <% } %>
+          </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+    <div class="botm-legend">
+      <span class="legend-item"><span class="legend-swatch botm-finished">✓</span> Finished</span>
+      <span class="legend-item"><span class="legend-swatch botm-reading">↻</span> Reading</span>
+      <span class="legend-item"><span class="legend-swatch botm-abandoned">✗</span> Abandoned</span>
+      <span class="legend-item"><span class="legend-swatch botm-dnr">—</span> Did not read</span>
+      <span class="legend-item"><span class="legend-swatch botm-not-enrolled"> </span> Not enrolled</span>
+    </div>
+    <% } %>
+  </section>
+  <% } %>
+
+  <!-- ── Genre Breakdown ───────────────────────────────────────────────────── -->
+  <% if (stats.genreCounts.length > 0) { %>
+  <section class="stats-section">
+    <h2>Genres <span class="section-sub">(finished books)</span></h2>
+    <div class="genre-list">
+      <% const maxCount = stats.genreCounts[0].count; %>
+      <% for (const { genre, count } of stats.genreCounts) { %>
+      <div class="genre-row">
+        <div class="genre-label"><%= genre %></div>
+        <div class="genre-bar-wrap">
+          <div class="genre-bar" style="width:<%= ((count / maxCount) * 100).toFixed(0) %>%"></div>
+        </div>
+        <div class="genre-count"><%= count %></div>
+      </div>
+      <% } %>
+    </div>
+  </section>
+  <% } %>
+
+  <!-- ── Reading History ───────────────────────────────────────────────────── -->
+  <section class="stats-section">
+    <div class="section-header">
+      <h2>Reading History</h2>
+      <span id="history-count" class="section-sub"><%= stats.history.length %> book<%= stats.history.length !== 1 ? 's' : '' %></span>
+    </div>
+
+    <div class="filter-bar">
+      <select id="filter-status">
+        <option value="">All Statuses</option>
+        <option value="finished">Finished</option>
+        <option value="reading">Reading</option>
+        <option value="abandoned">Abandoned</option>
+        <option value="dnr">Did Not Read</option>
+      </select>
+      <select id="filter-type">
+        <option value="">All Types</option>
+        <option value="botm">Book Club</option>
+        <option value="personal">Personal</option>
+      </select>
+      <select id="filter-year">
+        <option value="">All Years</option>
+        <% for (const y of stats.historyYears) { %>
+          <option value="<%= y %>"><%= y %></option>
+        <% } %>
+      </select>
+    </div>
+
+    <div class="table-wrap">
+      <table id="history-table">
+        <thead>
+          <tr>
+            <th style="width:44px"></th>
+            <th>Book</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Progress</th>
+            <th>Rating</th>
+            <th>Started</th>
+            <th>Finished</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% for (const log of stats.history) { %>
+          <tr data-status="<%= log.status %>"
+              data-type="<%= log.isBotm ? 'botm' : 'personal' %>"
+              data-year="<%= log.startedAt.getFullYear() %>">
+            <td>
+              <% if (log.book.image) { %>
+                <img src="<%= log.book.image %>" class="book-thumb" alt="" />
+              <% } else { %>
+                <div class="book-thumb book-thumb-placeholder"></div>
+              <% } %>
+            </td>
+            <td>
+              <div class="book-title"><%= log.book.title %></div>
+              <div class="book-author"><%= log.book.author %></div>
+            </td>
+            <td>
+              <% if (log.isBotm) { %>
+                <span class="badge badge-botm">BOTM</span>
+              <% } else { %>
+                <span class="text-muted">Personal</span>
+              <% } %>
+            </td>
+            <td>
+              <% if (log.status === 'finished') { %>
+                <span class="badge badge-finished">Finished</span>
+              <% } else if (log.status === 'reading') { %>
+                <span class="badge badge-reading">Reading</span>
+              <% } else if (log.status === 'abandoned') { %>
+                <span class="badge badge-abandoned">Abandoned</span>
+              <% } else { %>
+                <span class="text-muted">Did not read</span>
+              <% } %>
+            </td>
+            <td>
+              <% if (log.status === 'finished') { %>
+                100%
+              <% } else if (log.status === 'reading' || log.status === 'abandoned') { %>
+                <%= pct(log.progress) %>
+              <% } else { %>
+                —
+              <% } %>
+            </td>
+            <td><%= stars(log.rating) %></td>
+            <td><%= fmtMonth(log.startedAt) %></td>
+            <td><%= log.finishedAt ? fmtMonth(log.finishedAt) : '—' %></td>
+          </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-count" id="history-empty" style="display:none">No books match the selected filters.</div>
+  </section>
+
+  <% } /* end if stats */ %>
+</div>
+
+<script>
+  // ── Year toggle ─────────────────────────────────────────────────────────────
+  (function () {
+    const yearBtn = document.getElementById('toggle-year');
+    const allBtn  = document.getElementById('toggle-all');
+    const yearEl  = document.getElementById('stats-year');
+    const allEl   = document.getElementById('stats-all');
+    if (!yearBtn) return;
+    yearBtn.addEventListener('click', function () {
+      yearEl.style.display = 'grid';
+      allEl.style.display  = 'none';
+      yearBtn.classList.add('active');
+      allBtn.classList.remove('active');
+    });
+    allBtn.addEventListener('click', function () {
+      allEl.style.display  = 'grid';
+      yearEl.style.display = 'none';
+      allBtn.classList.add('active');
+      yearBtn.classList.remove('active');
+    });
+  })();
+
+  // ── History table filters ────────────────────────────────────────────────────
+  (function () {
+    const statusSel = document.getElementById('filter-status');
+    const typeSel   = document.getElementById('filter-type');
+    const yearSel   = document.getElementById('filter-year');
+    const countEl   = document.getElementById('history-count');
+    const emptyEl   = document.getElementById('history-empty');
+    if (!statusSel) return;
+
+    function applyFilters() {
+      const status = statusSel.value;
+      const type   = typeSel.value;
+      const year   = yearSel.value;
+      const rows   = document.querySelectorAll('#history-table tbody tr');
+      let visible  = 0;
+      rows.forEach(function (row) {
+        const show =
+          (!status || row.dataset.status === status) &&
+          (!type   || row.dataset.type   === type)   &&
+          (!year   || row.dataset.year   === year);
+        row.style.display = show ? '' : 'none';
+        if (show) visible++;
+      });
+      countEl.textContent = visible + ' book' + (visible !== 1 ? 's' : '');
+      emptyEl.style.display = visible === 0 ? '' : 'none';
+    }
+
+    statusSel.addEventListener('change', applyFilters);
+    typeSel.addEventListener('change',   applyFilters);
+    yearSel.addEventListener('change',   applyFilters);
+  })();
+</script>
+
+</body>
+</html>

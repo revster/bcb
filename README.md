@@ -37,8 +37,12 @@ A suite of commands for reviewing reading history across the club:
 
 All report commands handle re-runs of `/club-start` correctly — a member who has a `finished` log for a book is never double-counted as also `reading` it. Historical reads can be imported as `dnr` (did not read) for members who were enrolled in a club month but never started the book.
 
-### Admin web panel
-A browser-based admin interface at `http://localhost:3000` (or your deployed URL). Login is via Discord OAuth2 — only members with an admin role in the server are granted access. Admins can:
+### Web panel
+A browser-based interface at `http://localhost:3000` (or your deployed URL). Login is via Discord OAuth2 for any guild member.
+
+**Member stats page (`/me`)** — every guild member can log in to see their personal reading stats: currently reading progress bars, this-year vs all-time counts, pages read, avg rating, favourite genre, highlights (longest book, highest rated, most recent finish), a BOTM participation grid, genre breakdown bars, and a filterable reading history table.
+
+**Admin panel (`/admin`)** — restricted to members with an admin role. Admins can:
 
 - View all reading logs with filtering by member and status
 - Add historical reads (with Goodreads URL lookup)

@@ -15,12 +15,11 @@ A Discord bot for managing a book club server. Core features:
 - **Club read tracking** — `/club-start` designates the community-voted book, creates threads for all members, maintains a live progress post in `#progress`, and opens a spoiler discussion thread in `#epilogue`
 - **Report commands** — `/stats`, `/leaderboard`, `/finishers`, `/abandoners`, `/abandoned`
 - **Admin web panel** — Express/EJS site at `website/`; Discord OAuth2 login restricted to admin roles; admins can view, create, edit, and delete reading logs
-- **Monthly nominations & ranked voting** — on the `features/voting` branch
+- **Monthly nominations & ranked voting** — members nominate books each month; a poll is opened for members to vote on the winner
 
 ## Branches
 
 - `main` — stable; contains all merged features to date. **This is the only branch pushed to remote.**
-- `features/voting` — nominations and ranked voting system (not yet merged)
 - `features/reading-tracker` — personal reading tracker + club read tracking (merged into main)
 - `features/reports` — report commands /stats, /leaderboard, /finishers, /abandoners, /abandoned (merged into main)
 - `features/website` — admin web panel with Discord OAuth2 (merged into main)
@@ -28,6 +27,7 @@ A Discord bot for managing a book club server. Core features:
 - `features/typescript` — full TypeScript migration (merged into main via features/drizzle)
 - `features/drizzle` — Prisma → Drizzle ORM migration, TypeScript, enhanced /stats, BOTM vs club read distinction, seed script (merged into main)
 - `features/websiteImprovements` — /checkup command, multi-book-month streak fix, login page cleanup (merged into main)
+- `features/websiteStats` — user stats page at `/me` for all guild members; auth updated to allow any guild member to log in; admin role stored in session (merged into main)
 
 **The `dev.db` file is not tracked by git.** To recreate it from scratch: `rm -f dev.db && npx drizzle-kit push`. Schema is defined in `schema.ts`.
 
@@ -93,6 +93,7 @@ Each file exports `{ data, execute }` — `data` is a `SlashCommandBuilder` and 
 | `/abandoners [year]` | Ranks members by number of club reads abandoned. Shows abandoned count, enrolled count, abandonment rate. Optional year filter. Competition ranking. |
 | `/abandoned` | Ranks club books by how many members abandoned them. Shows title, author, month/year, abandoned/enrolled ratio. Competition ranking. |
 | `/checkup` | Admin. Ephemeral. For every registered member, verifies their forum channel still exists and has both the "Bot" and "Book of the Month" tags. Reports per-member issues or an all-clear. |
+| `/vote` | Cast top-3 ranked votes for this month's book. Three sequential ephemeral select menus — each step removes previously chosen books so duplicates are impossible. Saves a `Vote` row (Borda: 1st/2nd/3rd). One vote per user per poll. |
 
 ### Discord channels (all looked up by name, never stored by ID)
 
@@ -131,24 +132,37 @@ if (!log) {
 
 ### Admin website (`website/`)
 
-An Express 5 + EJS web panel for admins. Started with `npm run website` (port 3000 by default).
+An Express 5 + EJS web panel. Started with `npm run website` (port 3000 by default).
 
-**Entry point:** `website/server.ts` — mounts Helmet (CSP, etc.), sessions (SQLite via `connect-sqlite3`), CSRF middleware, rate limiting on auth routes, and the three routers.
+**Entry point:** `website/server.ts` — mounts Helmet (CSP, etc.), sessions (SQLite via `connect-sqlite3`), CSRF middleware, rate limiting on auth routes, and the four routers.
 
 **Routers:**
 - `website/routes/auth.ts` — Discord OAuth2 flow (`/auth/discord` → callback → session), logout
 - `website/routes/admin.ts` — HTML pages: dashboard, log list (with member/status filter), create/edit/delete log
 - `website/routes/api.ts` — JSON API: `/api/books/scrape` (Goodreads lookup — validates URL against `GOODREADS_BOOK_RE` before scraping to prevent SSRF), `/api/members`, `/api/logs`
+- `website/routes/user.ts` — `GET /me` — personal stats page for any logged-in guild member
 
 **Middleware:**
-- `website/middleware/requireAdmin.ts` — redirects to `/auth/login` if no session user; sets `res.locals.user`
+- `website/middleware/requireAdmin.ts` — redirects to `/auth/login` if no session user or `user.isAdmin !== true`; sets `res.locals.user`
+- `website/middleware/requireLogin.ts` — redirects to `/auth/login` if no session user (any guild member passes); sets `res.locals.user`
 - `website/middleware/csrf.ts` — per-session CSRF token; validates `_csrf` field on all mutating requests; skips `/auth/discord/callback`
 
-**Auth flow:** Discord OAuth2 with `identify` scope. After token exchange, `isAdmin()` in `website/lib/discord.ts` checks the user's guild roles against `ADMIN_ROLE_NAMES`. Only matching roles get a session. `website/lib/discord.ts` exports a `DiscordUser` interface (`id`, `username`, `global_name`, `avatar`) — use it instead of `any` when working with Discord user objects from the OAuth flow.
+**Auth flow:** Discord OAuth2 with `identify` scope. After token exchange, `checkMembership()` in `website/lib/discord.ts` fetches guild member and roles in one round-trip and returns `{ inGuild, isAdmin }`. Non-guild-members are rejected. All guild members get a session; `isAdmin` is stored on `req.session.user` and checked per-route. `website/lib/discord.ts` exports a `DiscordUser` interface (`id`, `username`, `global_name`, `avatar`) — use it instead of `any` when working with Discord user objects from the OAuth flow.
+
+**User stats page (`/me`):** Queries all reading logs for the logged-in user via `website/lib/userStats.ts` (`computeUserStats(userId)`), which returns a structured `UserStats` object used by `website/views/user/stats.ejs`. Sections: currently reading (CSS progress bars), overview stat cards (this year / all time toggle), highlights (favourite genre, longest book, highest rated, most recent finish), BOTM participation grid (HTML table with coloured status cells), genre breakdown (CSS horizontal bars), and a filterable reading history table.
 
 **CSP note:** Helmet sets `script-src-attr 'none'` by default, which blocks all inline `onclick`/`onchange` attributes. All event handlers in EJS templates must be wired with `addEventListener` in `<script>` blocks — never use inline handlers.
 
 **Views:** EJS templates in `website/views/`. Partials: `head.ejs` (applies saved dark/light theme before render to prevent flash), `nav.ejs` (includes theme toggle script). Dark mode is toggled via `data-theme="dark"` on `<html>` and persisted in `localStorage`.
+
+### Voting system
+
+`/vote` uses three sequential ephemeral select menus (step encoded in custom ID: `vote:1`, `vote:2:<first>`, `vote:3:<first>:<second>`). State is passed entirely through custom IDs — no server-side session. Select menu interactions are routed in `index.ts` by `customId.startsWith('vote:')` and handled by `handleVoteSelect` exported from `commands/vote.ts`.
+
+**Current hardcoded state** — nominations are a static array in `commands/vote.ts`. An open `Poll` row is auto-created for the current month if none exists (dev convenience). When the nomination system is built, the following must change:
+- Replace the `NOMINATIONS` array with a DB query for `Nomination` rows tied to the active `Poll`
+- Replace `Vote.first/second/third` (string keys) with integer FK references to `Nomination.id` or `Book.id`
+- Remove the auto-create poll logic from `getOpenPoll()` and replace with an admin command that opens polls explicitly
 
 ### Adding a new slash command
 
@@ -179,10 +193,8 @@ rm -f dev.db && npx drizzle-kit push
 | `User` | Known Discord users. Upserted on every command interaction. Used by report commands to resolve display names. |
 | `Setting` | Key/value store. Used for `reminders_enabled` flag. |
 | `ReminderQuip` | Text quips used in weekly reminder pings. |
-
-### Tables present in schema but unused on main
-
-`NominationPeriod`, `Nomination`, `Poll`, `PollVote`, `CurrentBook`, `ReadingProgress` — these belong to `features/voting` or are legacy. Do not remove them; they share the same schema file.
+| `Poll` | One poll per month/year. Has an `open` flag. |
+| `Vote` | One row per user per poll. `first`, `second`, `third` are currently string keys into the hardcoded `NOMINATIONS` array in `commands/vote.ts`. **TODO:** replace with integer FK references to `Nomination.id` (or `Book.id`) once the nomination system is built. |
 
 ### Drizzle query patterns
 

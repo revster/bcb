@@ -10,6 +10,7 @@ const path       = require('path');
 const authRoutes   = require('./routes/auth');
 const adminRoutes  = require('./routes/admin');
 const apiRoutes    = require('./routes/api');
+const userRoutes   = require('./routes/user');
 const requireAdmin = require('./middleware/requireAdmin');
 const csrf         = require('./middleware/csrf');
 
@@ -78,8 +79,11 @@ app.use('/admin', requireAdmin, adminRoutes);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 app.get('/', (req: any, res: any) => {
-  res.redirect(req.session?.user ? '/admin' : '/auth/login');
+  if (!req.session?.user) return res.redirect('/auth/login');
+  res.redirect(req.session.user.isAdmin ? '/admin' : '/me');
 });
+
+app.use('/', userRoutes);
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

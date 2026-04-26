@@ -23,8 +23,18 @@ describe('requireAdmin middleware', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('sets res.locals.user and calls next when session has a user', () => {
-    const user = { id: '123', username: 'admin' };
+  test('redirects to /auth/login?error=not_admin when user lacks admin role', () => {
+    const user = { id: '123', username: 'member', isAdmin: false };
+    const req = makeReq(user);
+    const res = makeRes();
+    const next = jest.fn();
+    requireAdmin(req, res, next);
+    expect(res.redirect).toHaveBeenCalledWith('/auth/login?error=not_admin');
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('sets res.locals.user and calls next when user has admin role', () => {
+    const user = { id: '123', username: 'admin', isAdmin: true };
     const req = makeReq(user);
     const res = makeRes();
     const next = jest.fn();

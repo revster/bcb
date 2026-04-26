@@ -3,17 +3,18 @@ import type { Request, Response } from 'express';
 
 const express = require('express');
 const router = express.Router();
-const { getDiscordUser, isAdmin } = require('../lib/discord');
+const { getDiscordUser, checkMembership } = require('../lib/discord');
 
 const DISCORD_AUTH_URL = 'https://discord.com/api/oauth2/authorize';
 const DISCORD_TOKEN_URL = 'https://discord.com/api/oauth2/token';
 
-type ErrorKey = 'cancelled' | 'invalid_state' | 'not_admin' | 'oauth_failed';
+type ErrorKey = 'cancelled' | 'invalid_state' | 'not_admin' | 'oauth_failed' | 'not_in_guild';
 
 const ERROR_MESSAGES: Record<ErrorKey, string> = {
   cancelled:     'Login cancelled.',
   invalid_state: 'Login failed (invalid state). Please try again.',
   not_admin:     'You do not have an admin role in the server.',
+  not_in_guild:  'You must be a member of the server to log in.',
   oauth_failed:  'Login failed. Please try again.',
 };
 
@@ -21,7 +22,7 @@ const ERROR_MESSAGES: Record<ErrorKey, string> = {
 type SessionReq = Request & { session: any };
 
 router.get('/login', (req: SessionReq, res: Response) => {
-  if (req.session.user) return res.redirect('/admin');
+  if (req.session.user) return res.redirect(req.session.user.isAdmin ? '/admin' : '/me');
   const error = ERROR_MESSAGES[req.query.error as ErrorKey] ?? null;
   res.render('login', { error });
 });
@@ -72,9 +73,10 @@ router.get('/discord/callback', async (req: SessionReq, res: Response) => {
     const { access_token } = await tokenRes.json() as { access_token: string };
 
     const discordUser = await getDiscordUser(access_token);
+    const { inGuild, isAdmin: adminFlag } = await checkMembership(discordUser.id);
 
-    if (!(await isAdmin(discordUser.id))) {
-      return res.redirect('/auth/login?error=not_admin');
+    if (!inGuild) {
+      return res.redirect('/auth/login?error=not_in_guild');
     }
 
     req.session.user = {
@@ -82,9 +84,10 @@ router.get('/discord/callback', async (req: SessionReq, res: Response) => {
       username:   discordUser.username,
       globalName: discordUser.global_name,
       avatar:     discordUser.avatar,
+      isAdmin:    adminFlag,
     };
 
-    res.redirect('/admin');
+    res.redirect(adminFlag ? '/admin' : '/me');
   } catch (err) {
     console.error('OAuth error:', err);
     res.redirect('/auth/login?error=oauth_failed');
