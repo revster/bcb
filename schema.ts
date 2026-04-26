@@ -96,29 +96,7 @@ export const clubBooks = sqliteTable('ClubBook', {
   unique('ClubBook_bookId_unique').on(t.bookId),
 ]);
 
-// ── Unused models (belong to features/voting — do not remove) ─────────────────
-
-export const nominationPeriods = sqliteTable('NominationPeriod', {
-  id:            integer('id').primaryKey({ autoIncrement: true }),
-  month:         integer('month').notNull(),
-  year:          integer('year').notNull(),
-  openToAll:     integer('openToAll', { mode: 'boolean' }).notNull(),
-  nominatorId:   text('nominatorId'),
-  nominatorName: text('nominatorName'),
-  createdAt:     timestamp('createdAt').notNull().$defaultFn(() => new Date()),
-}, (t) => [
-  unique('NominationPeriod_month_year_key').on(t.month, t.year),
-]);
-
-export const nominations = sqliteTable('Nomination', {
-  id:        integer('id').primaryKey({ autoIncrement: true }),
-  bookId:    integer('bookId').notNull().references(() => books.id),
-  userId:    text('userId').notNull(),
-  username:  text('username').notNull(),
-  month:     integer('month').notNull(),
-  year:      integer('year').notNull(),
-  createdAt: timestamp('createdAt').notNull().$defaultFn(() => new Date()),
-});
+// ── Voting ────────────────────────────────────────────────────────────────────
 
 export const polls = sqliteTable('Poll', {
   id:        integer('id').primaryKey({ autoIncrement: true }),
@@ -130,33 +108,18 @@ export const polls = sqliteTable('Poll', {
   unique('Poll_month_year_key').on(t.month, t.year),
 ]);
 
-export const pollVotes = sqliteTable('PollVote', {
+// TODO: once the nomination system is built, replace first/second/third (string keys)
+// with integer foreign keys referencing Nomination.id (or Book.id directly).
+export const votes = sqliteTable('Vote', {
   id:        integer('id').primaryKey({ autoIncrement: true }),
   pollId:    integer('pollId').notNull().references(() => polls.id),
-  bookId:    integer('bookId').notNull(),
   userId:    text('userId').notNull(),
+  first:     text('first').notNull(),
+  second:    text('second').notNull(),
+  third:     text('third').notNull(),
   createdAt: timestamp('createdAt').notNull().$defaultFn(() => new Date()),
 }, (t) => [
-  unique('PollVote_pollId_userId_key').on(t.pollId, t.userId),
-]);
-
-export const currentBooks = sqliteTable('CurrentBook', {
-  id:        integer('id').primaryKey({ autoIncrement: true }),
-  bookId:    integer('bookId').notNull().references(() => books.id),
-  startedAt: timestamp('startedAt').notNull().$defaultFn(() => new Date()),
-}, (t) => [
-  unique('CurrentBook_bookId_unique').on(t.bookId),
-]);
-
-export const readingProgress = sqliteTable('ReadingProgress', {
-  id:            integer('id').primaryKey({ autoIncrement: true }),
-  currentBookId: integer('currentBookId').notNull().references(() => currentBooks.id),
-  userId:        text('userId').notNull(),
-  username:      text('username').notNull(),
-  page:          integer('page').notNull(),
-  updatedAt:     timestamp('updatedAt').notNull().$defaultFn(() => new Date()).$onUpdate(() => new Date()),
-}, (t) => [
-  unique('ReadingProgress_currentBookId_userId_key').on(t.currentBookId, t.userId),
+  unique('Vote_pollId_userId_key').on(t.pollId, t.userId),
 ]);
 
 // ── Relations ─────────────────────────────────────────────────────────────────
@@ -164,8 +127,6 @@ export const readingProgress = sqliteTable('ReadingProgress', {
 export const booksRelations = relations(books, ({ many, one }) => ({
   readingLogs: many(readingLogs),
   clubBook:    one(clubBooks, { fields: [books.id], references: [clubBooks.bookId] }),
-  nominations: many(nominations),
-  currentBook: one(currentBooks, { fields: [books.id], references: [currentBooks.bookId] }),
 }));
 
 export const readingLogsRelations = relations(readingLogs, ({ one }) => ({
@@ -176,21 +137,12 @@ export const clubBooksRelations = relations(clubBooks, ({ one }) => ({
   book: one(books, { fields: [clubBooks.bookId], references: [books.id] }),
 }));
 
-export const nominationsRelations = relations(nominations, ({ one }) => ({
-  book: one(books, { fields: [nominations.bookId], references: [books.id] }),
+export const pollsRelations = relations(polls, ({ many }) => ({
+  votes: many(votes),
 }));
 
-export const pollVotesRelations = relations(pollVotes, ({ one }) => ({
-  poll: one(polls, { fields: [pollVotes.pollId], references: [polls.id] }),
-}));
-
-export const currentBooksRelations = relations(currentBooks, ({ one, many }) => ({
-  book:     one(books, { fields: [currentBooks.bookId], references: [books.id] }),
-  progress: many(readingProgress),
-}));
-
-export const readingProgressRelations = relations(readingProgress, ({ one }) => ({
-  currentBook: one(currentBooks, { fields: [readingProgress.currentBookId], references: [currentBooks.id] }),
+export const votesRelations = relations(votes, ({ one }) => ({
+  poll: one(polls, { fields: [votes.pollId], references: [polls.id] }),
 }));
 
 // ── Inferred types (replaces @prisma/client imports) ─────────────────────────
@@ -202,4 +154,6 @@ export type MemberChannel = InferSelectModel<typeof memberChannels>;
 export type User = InferSelectModel<typeof users>;
 export type Setting = InferSelectModel<typeof settings>;
 export type ReminderQuip = InferSelectModel<typeof reminderQuips>;
+export type Poll = InferSelectModel<typeof polls>;
+export type Vote = InferSelectModel<typeof votes>;
 export type LogWithBook = ReadingLog & { book: Book };

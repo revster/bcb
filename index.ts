@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { Client, GatewayIntentBits, Collection, MessageFlags, ChatInputCommandInteraction } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, MessageFlags, ChatInputCommandInteraction, StringSelectMenuInteraction } from 'discord.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import cron = require('node-cron');
@@ -7,6 +7,7 @@ import db = require('./db');
 import { users } from './schema';
 import { sendReminders } from './lib/reminders';
 import { botLog } from './lib/botLog';
+import { handleVoteSelect } from './commands/vote';
 
 interface Command {
   data: { name: string; toJSON(): unknown };
@@ -54,8 +55,22 @@ client.once('clientReady', () => {
 });
 
 client.on('interactionCreate', async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
   if (isDuplicate(interaction.id)) return;
+
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith('vote:')) {
+    try {
+      await handleVoteSelect(interaction as StringSelectMenuInteraction);
+    } catch (err) {
+      const msg = (err as Error)?.message ?? String(err);
+      if (interaction.guild) botLog(interaction.guild, `[error] vote select by ${interaction.user.username}: ${msg}`);
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: 'Something went wrong.', flags: MessageFlags.Ephemeral });
+      }
+    }
+    return;
+  }
+
+  if (!interaction.isChatInputCommand()) return;
 
   const command = commands.get(interaction.commandName);
   if (!command) return;
