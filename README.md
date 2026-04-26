@@ -12,10 +12,10 @@ A Discord bot and admin web panel for managing a book club server. Members can t
 ### Personal reading tracker
 Each registered member has a personal forum channel. Use `/read` to start a new book thread — the bot scrapes Goodreads for metadata and creates a thread with the cover, rating, and genre info. From inside that thread, use `/progress` to log how far you've gotten and `/rate` to leave a star rating. Use `/abandon` if a book isn't working out.
 
-Personal books also appear in `#progress` with a live progress bar, so the whole club can see what everyone is reading at once. The bar is posted at 0% when you start a book and updated in-place as you log progress. Abandoning a book marks it with `✗`.
+Personal books also appear in `#the-marauders-map` with a live progress bar, so the whole club can see what everyone is reading at once. The bar is posted at 0% when you start a book and updated in-place as you log progress. Abandoning a book marks it with `✗`.
 
 ### Club read tracking
-An admin uses `/club-start` to designate the monthly pick. The bot creates a reading thread for every registered member, opens a spoiler discussion thread in `#epilogue`, and maintains a live progress board in `#progress` showing every member's reading bar at a glance. The board updates automatically as members log progress.
+An admin uses `/club-start` to designate the monthly pick. The bot creates a reading thread for every registered member, opens a spoiler discussion thread in `#epilogue`, and maintains a live progress board in `#the-marauders-map` showing every member's reading bar at a glance. The board updates automatically as members log progress.
 
 ```
 alice    ████████████░░░░░░░░   62%
@@ -58,6 +58,18 @@ A browser-based interface at `http://localhost:3000` (or your deployed URL). Log
 - Mark books as Book of the Month with an optional month/year
 - Manage the reminder quip library (add or remove quips)
 
+### Monthly nominations and voting
+
+Each month's book is chosen through a structured nomination and ranked voting process, with all activity announced in `#book-nominations`.
+
+1. An admin opens nominations with `/nominate-begin` — either open to all members (one nomination each) or restricted to a single designated nominator.
+2. Members run `/nominate <goodreads-url>` to submit their pick. The bot scrapes metadata and confirms with a book embed.
+3. Anyone can run `/list-nominations` to see the current slate and (for open-to-all periods) who hasn't nominated yet.
+4. Admin closes nominations with `/nominate-end`, which posts the final slate to `#book-nominations`.
+5. Admin opens the poll with `/vote-begin`. Members run `/vote` to cast ranked top-3 preferences via sequential select menus. Revoting is allowed.
+6. Admin closes voting with `/vote-end`. The bot tallies a Borda count (1st=3pts, 2nd=2pts, 3rd=1pt) and announces the winner and full results in `#book-nominations`.
+7. Admins can run `/vote-explain` to see the full per-voter breakdown of how the winner was determined.
+
 ### Weekly reading reminders
 The bot pings members who haven't logged progress on the current month's Book of the Month in 7+ days, using a randomly selected quip from the admin-managed quip library. Reminders are idempotent — each member is pinged at most once every 7 days. Admins can toggle reminders on or off with `/reminders enable` / `/reminders disable`.
 
@@ -68,7 +80,12 @@ The bot pings members who haven't logged progress on the current month's Book of
 |---|---|
 | `/register <user> <channel>` | Map a member to their personal forum channel |
 | `/unregister <user>` | Remove a member from club tracking (threads/logs kept) |
-| `/club-start <url> [month] [year]` | Start a club read — creates threads for all members, opens epilogue thread, initialises `#progress`. Providing `month` and `year` designates it as an official Book of the Month (appears in stats/leaderboard). Without them it's an informal club read — threads and progress tracking still work, but it won't count in BOTM reports. |
+| `/club-start <url> [month] [year]` | Start a club read — creates threads for all members, opens epilogue thread, initialises `#the-marauders-map`. Providing `month` and `year` designates it as an official Book of the Month (appears in stats/leaderboard). Without them it's an informal club read — threads and progress tracking still work, but it won't count in BOTM reports. |
+| `/nominate-begin <month> <year> [user]` | Open a nomination period. Without `user`, all members can nominate one book each. With `user`, only that person can nominate (unlimited). |
+| `/nominate-end` | Close the current nomination period and post the slate to `#book-nominations`. Required before `/vote-begin`. |
+| `/vote-begin [month] [year]` | Open a poll for the given month/year. Blocked if nominations are still open. |
+| `/vote-end` | Close the poll, tally Borda count, and announce the winner in `#book-nominations`. |
+| `/vote-explain [month] [year]` | Show the full per-voter Borda breakdown (ephemeral). |
 | `/reminders enable` | Enable weekly reading reminder pings |
 | `/reminders disable` | Disable weekly reading reminder pings |
 | `/reminders status` | Check whether reminders are currently enabled |
@@ -77,10 +94,13 @@ The bot pings members who haven't logged progress on the current month's Book of
 ### Member
 | Command | Description |
 |---|---|
-| `/read <url>` | Start tracking a personal book — creates a thread in your forum channel and posts an initial 0% bar to `#progress` |
-| `/progress [page] [percentage]` | Log reading progress from inside your book thread — posts a compact bar in the thread and updates your bar in `#progress` |
+| `/read <url>` | Start tracking a personal book — creates a thread in your forum channel and posts an initial 0% bar to `#the-marauders-map` |
+| `/progress [page] [percentage]` | Log reading progress from inside your book thread — posts a compact bar in the thread and updates your bar in `#the-marauders-map` |
 | `/rate <rating>` | Rate the book 1–5 stars (decimals allowed) from inside your book thread |
-| `/abandon` | Mark the current book as abandoned — updates your bar in `#progress` with `✗` |
+| `/abandon` | Mark the current book as abandoned — updates your bar in `#the-marauders-map` with `✗` |
+| `/nominate <url>` | Nominate a book by Goodreads URL during an open nomination period |
+| `/list-nominations` | Show the current nomination slate (only during nominations or voting) |
+| `/vote` | Cast top-3 ranked votes for this month's book (during an open poll) |
 
 ### Reports
 | Command | Description |
@@ -161,9 +181,10 @@ The bot looks up channels by name, not ID. Create these channels before running 
 
 | Channel | Purpose |
 |---|---|
-| `#progress` | Live club read progress board (managed by bot) |
+| `#the-marauders-map` | Live club read progress board (managed by bot) |
 | `#epilogue` | Spoiler discussion — one thread per club book |
 | `#bot-log` | Admin event log — restrict to admins + bot role |
+| `#book-nominations` | Public announcements for all nomination and voting events |
 
 Each registered member also needs a **Forum channel** that the bot will create threads in. Pass that channel to `/register`.
 

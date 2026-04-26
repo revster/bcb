@@ -17,7 +17,7 @@ import db = require('../db');
 import { memberChannels, books, readingLogs, clubBooks } from '../schema';
 import scrapeBook from '../lib/scrapeBook';
 import { buildBookEmbed } from '../lib/buildBookEmbed';
-import { updateProgressPost, buildBar } from '../lib/progressPost';
+import { updateProgressPost, buildBar, PROGRESS_CHANNEL_NAME } from '../lib/progressPost';
 import { botLog } from '../lib/botLog';
 
 const GOODREADS_BOOK_RE = /^https:\/\/(www\.)?goodreads\.com\/book\/show\//;
@@ -111,7 +111,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const clubBook = db.select().from(clubBooks).where(eq(clubBooks.bookId, book.id)).get();
   if (!clubBook) {
     const allChannels = await interaction.guild!.channels.fetch();
-    const progressChannel = allChannels.find(c => c?.name === 'progress') as TextChannel | undefined;
+    const progressChannel = allChannels.find(c => c?.name === PROGRESS_CHANNEL_NAME) as TextChannel | undefined;
     if (progressChannel) {
       const bar = buildBar(0);
       const content = `📖 **${interaction.user.displayName}** started reading *${title}* by ${author}\n\`${bar}  0%\``;

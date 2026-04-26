@@ -17,7 +17,7 @@ import { clubBooks, readingLogs, memberChannels } from '../schema';
 import { buildBookEmbed } from './buildBookEmbed';
 import { botLog } from './botLog';
 
-const PROGRESS_CHANNEL_NAME = 'progress';
+export const PROGRESS_CHANNEL_NAME = 'the-marauders-map';
 const BAR_LENGTH = 20;
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',

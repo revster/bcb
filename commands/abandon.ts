@@ -11,7 +11,7 @@ import { eq } from 'drizzle-orm';
 import db = require('../db');
 import { readingLogs, clubBooks } from '../schema';
 import { buildBookEmbed } from '../lib/buildBookEmbed';
-import { updateProgressPost, buildBar } from '../lib/progressPost';
+import { updateProgressPost, buildBar, PROGRESS_CHANNEL_NAME } from '../lib/progressPost';
 import { botLog } from '../lib/botLog';
 
 export const data = new SlashCommandBuilder()
@@ -99,7 +99,7 @@ export async function execute(interaction: ChatInputCommandInteraction): Promise
   const clubBook = db.select().from(clubBooks).where(eq(clubBooks.bookId, log.bookId)).get();
   if (!clubBook) {
     const allChannels = await interaction.guild!.channels.fetch();
-    const progressChannel = allChannels.find(c => c?.name === 'progress') as TextChannel | undefined;
+    const progressChannel = allChannels.find(c => c?.name === PROGRESS_CHANNEL_NAME) as TextChannel | undefined;
     if (progressChannel) {
       const bar = buildBar(log.progress);
       const pctStr = `${Math.round(log.progress)}%`;

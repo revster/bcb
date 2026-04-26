@@ -28,6 +28,7 @@ A Discord bot for managing a book club server. Core features:
 - `features/drizzle` — Prisma → Drizzle ORM migration, TypeScript, enhanced /stats, BOTM vs club read distinction, seed script (merged into main)
 - `features/websiteImprovements` — /checkup command, multi-book-month streak fix, login page cleanup (merged into main)
 - `features/websiteStats` — user stats page at `/me`, public member profiles at `/u/:userId`, club leaderboard at `/leaderboard`, club-wide stats at `/club`, book detail at `/book/:bookId`; auth updated to allow any guild member to log in; branding updated to Hermione's Army; mobile-responsive nav with hamburger menu (merged into main)
+- `features/voting` — full nominations system (`/nominate-begin`, `/nominate`, `/nominate-end`, `/list-nominations`), voting overhaul (`/vote` from DB, `/vote-begin`/`/vote-end` with `#book-nominations` announcements, `/vote-explain`), renamed `#progress` → `#the-marauders-map`, `#book-nominations` channel added (in progress)
 
 **The `dev.db` file is not tracked by git.** To recreate it from scratch: `rm -f dev.db && npx drizzle-kit push`. Schema is defined in `schema.ts`.
 
@@ -67,8 +68,8 @@ rm -f dev.db && npx drizzle-kit push   # Recreate the SQLite schema from scratch
 - `schema.ts` — Drizzle table definitions and inferred TypeScript types for all tables. All unique constraints use explicit `unique('name').on(col)` in the table constraints array (not inline `.unique()` on columns). Dates stored as ISO 8601 TEXT via a custom `timestamp` type.
 - `lib/scrapeBook.ts` — Fetches a Goodreads book page and extracts metadata (title, author, rating, pages, image, genres) from the JSON-LD script tag and HTML. HTML entities in titles/authors are decoded via cheerio.
 - `lib/buildBookEmbed.ts` — Single source of truth for the book info embed. Used by `/read`, `/club-start` (member threads + epilogue), `/abandon`, and `progressPost.ts`. Accepts genres as either an array (scraped data) or a JSON string (DB record).
-- `lib/progressPost.ts` — Maintains the two-message `#progress` post for club books. Message 1 is the book embed; message 2 is the monospace progress bar block. Both message IDs are stored on `ClubBook` and edited in-place; if either is missing both are recreated. Deduplicates by user (most recent log per user). Called after any command that changes reading status or progress. Also exports `buildBar(pct, length?)` for reuse by commands that post personal-book progress bars.
-- `lib/botLog.ts` — Posts a timestamped (`HH:MM:SS UTC`) event to `#bot-log` (looked up by name in guild cache). Swallows errors silently so logging never breaks a command. Imported by every command.
+- `lib/progressPost.ts` — Maintains the two-message `#the-marauders-map` post for club books. Message 1 is the book embed; message 2 is the monospace progress bar block. Both message IDs are stored on `ClubBook` and edited in-place; if either is missing both are recreated. Deduplicates by user (most recent log per user). Called after any command that changes reading status or progress. Exports `buildBar(pct, length?)` for reuse by commands that post personal-book progress bars, and `PROGRESS_CHANNEL_NAME` (the channel name constant) used by `/read`, `/progress`, and `/abandon`.
+- `lib/botLog.ts` — Exports `botLog` (timestamped `HH:MM:SS UTC` event to `#bot-log`) and `bookNominations` (plain message to `#book-nominations`). Both use the internal `postToChannel` helper that looks up channels by name and swallows errors silently so logging never breaks a command.
 - `lib/resolveUsernames.ts` — Merges `User` and `MemberChannel` tables to map Discord user IDs to display names. `User` table wins (more recent). Used by `/leaderboard`, `/finishers`, `/abandoners`.
 
 ### Commands (`commands/`)
@@ -93,15 +94,23 @@ Each file exports `{ data, execute }` — `data` is a `SlashCommandBuilder` and 
 | `/abandoners [year]` | Ranks members by number of club reads abandoned. Shows abandoned count, enrolled count, abandonment rate. Optional year filter. Competition ranking. |
 | `/abandoned` | Ranks club books by how many members abandoned them. Shows title, author, month/year, abandoned/enrolled ratio. Competition ranking. |
 | `/checkup` | Admin. Ephemeral. For every registered member, verifies their forum channel still exists and has both the "Bot" and "Book of the Month" tags. Reports per-member issues or an all-clear. |
-| `/vote` | Cast top-3 ranked votes for this month's book. Three sequential ephemeral select menus — each step removes previously chosen books so duplicates are impossible. Saves a `Vote` row (Borda: 1st/2nd/3rd). One vote per user per poll. |
+| `/nominate-begin <month> <year> [user]` | Admin. Opens a nomination period. If `user` is specified, only that user can nominate (unlimited books). Otherwise all members can each nominate one book. Announces in `#book-nominations`. |
+| `/nominate-end` | Admin. Closes the open nomination period, posts the slate to `#book-nominations`. Must be called before `/vote-begin`. |
+| `/vote-begin [month] [year]` | Admin. Opens a poll for the given month/year (defaults to current). Blocks if a nomination period is still open. Re-opens a previously closed poll if one exists for that month/year. Announces in `#book-nominations`. |
+| `/vote-end` | Admin. Closes the open poll, tallies Borda count, announces winner and full results in `#book-nominations`. |
+| `/vote-explain [month] [year]` | Admin. Ephemeral. Full per-book Borda breakdown showing which users voted for each book in each position. Defaults to most recent poll. |
+| `/nominate <url>` | Nominate a book by Goodreads URL during an open nomination period. Scrapes metadata and replies with the book embed to confirm. Each member can nominate one book (or unlimited if they are the designated nominator). Announces in `#book-nominations`. |
+| `/list-nominations` | Show the current nomination slate. Only works while nominations or voting is open. For open-to-all periods, also lists members who haven't nominated yet. |
+| `/vote` | Cast top-3 ranked votes for this month's book. Three sequential ephemeral select menus — each step removes previously chosen books so duplicates are impossible. Saves a `Vote` row (Borda: 1st=3pts, 2nd=2pts, 3rd=1pt). Revoting (updating a previous vote) is allowed. Announces participation in `#book-nominations`. |
 
 ### Discord channels (all looked up by name, never stored by ID)
 
 | Channel | Name constant | Purpose |
 |---|---|---|
-| `#progress` | `'progress'` | Two-message club read progress post (managed by `lib/progressPost.ts`). Also receives single-message personal-book progress bars posted by `/read`, `/progress`, and `/abandon`. |
+| `#the-marauders-map` | `PROGRESS_CHANNEL_NAME` in `lib/progressPost.ts` | Two-message club read progress post (managed by `lib/progressPost.ts`). Also receives single-message personal-book progress bars posted by `/read`, `/progress`, and `/abandon`. |
 | `#epilogue` | `'epilogue'` | Spoiler discussion. One thread per club book created by `/club-start`. `/progress` (at 100%) links here. `/rate` posts ratings here for club reads. |
 | `#bot-log` | `'bot-log'` | Admin-only event log. All commands post here on success. Create in Discord and restrict to admins + bot role. |
+| `#book-nominations` | `'book-nominations'` | Public announcements for all nomination and voting events. Posted to by `lib/botLog.ts`'s `bookNominations` helper. |
 
 ### Bot-managed thread guard
 
@@ -165,14 +174,15 @@ An Express 5 + EJS web panel. Started with `npm run website` (port 3000 by defau
 
 **Views:** EJS templates in `website/views/`. Partials: `head.ejs` (applies saved dark/light theme before render to prevent flash), `nav.ejs` / `user-nav.ejs` (include theme toggle and hamburger scripts). Dark mode is toggled via `data-theme="dark"` on `<html>` and persisted in `localStorage`.
 
-### Voting system
+### Nominations and voting system
 
-`/vote` uses three sequential ephemeral select menus (step encoded in custom ID: `vote:1`, `vote:2:<first>`, `vote:3:<first>:<second>`). State is passed entirely through custom IDs — no server-side session. Select menu interactions are routed in `index.ts` by `customId.startsWith('vote:')` and handled by `handleVoteSelect` exported from `commands/vote.ts`.
+**Workflow:** `/nominate-begin` → members run `/nominate` → `/nominate-end` → `/vote-begin` → members run `/vote` → `/vote-end` announces winner. `/vote-begin` is blocked until nominations are closed.
 
-**Current hardcoded state** — nominations are a static array in `commands/vote.ts`. An open `Poll` row is auto-created for the current month if none exists (dev convenience). When the nomination system is built, the following must change:
-- Replace the `NOMINATIONS` array with a DB query for `Nomination` rows tied to the active `Poll`
-- Replace `Vote.first/second/third` (string keys) with integer FK references to `Nomination.id` or `Book.id`
-- Remove the auto-create poll logic from `getOpenPoll()` and replace with an admin command that opens polls explicitly
+**Nominations:** `NominationPeriod` tracks open/closed state and whether it's `openToAll` (one nomination per member) or restricted to a single designated nominator. `Nomination` stores each book nomination linked to a `Book` record. All events post to `#book-nominations`.
+
+**Voting:** `/vote` uses three sequential ephemeral select menus (step encoded in custom ID: `vote:1`, `vote:2:<first>`, `vote:3:<first>:<second>`). State is passed entirely through custom IDs — no server-side session. Select menu interactions are routed in `index.ts` by `customId.startsWith('vote:')` and handled by `handleVoteSelect` exported from `commands/vote.ts`. Options are loaded from DB nominations for the open poll's month/year. `Vote.first/second/third` store nomination IDs as strings. Revoting updates the existing row via `onConflictDoUpdate`.
+
+**Borda count:** 1st = 3 pts, 2nd = 2 pts, 3rd = 1 pt. `/vote-end` tallies scores and posts the winner and full ranked results to `#book-nominations`. `/vote-explain` (admin ephemeral) shows the per-book breakdown with named voters per position.
 
 ### Adding a new slash command
 
@@ -203,8 +213,10 @@ rm -f dev.db && npx drizzle-kit push
 | `User` | Known Discord users. Upserted on every command interaction. Used by report commands to resolve display names. |
 | `Setting` | Key/value store. Used for `reminders_enabled` flag. |
 | `ReminderQuip` | Text quips used in weekly reminder pings. |
-| `Poll` | One poll per month/year. Has an `open` flag. |
-| `Vote` | One row per user per poll. `first`, `second`, `third` are currently string keys into the hardcoded `NOMINATIONS` array in `commands/vote.ts`. **TODO:** replace with integer FK references to `Nomination.id` (or `Book.id`) once the nomination system is built. |
+| `NominationPeriod` | One record per month/year nomination window. `openToAll` boolean — if false, only `nominatorId` can nominate. `open` flag tracks whether submissions are still accepted. |
+| `Nomination` | One row per book per nomination period. Linked to `Book` by `bookId`. `userId`/`username` of the nominator. Unique on `(bookId, month, year)`. |
+| `Poll` | One poll per month/year. Has an `open` flag. Re-opened by `/vote-begin` if a closed poll already exists for that month/year. |
+| `Vote` | One row per user per poll. `first`, `second`, `third` store nomination IDs as strings (Borda: 1st=3pts, 2nd=2pts, 3rd=1pt). Unique on `(pollId, userId)` — revoting updates in place. |
 
 ### Drizzle query patterns
 
